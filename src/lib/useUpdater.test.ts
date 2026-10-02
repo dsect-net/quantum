@@ -21,7 +21,9 @@ vi.mock('@capacitor/app', () => ({
   },
 }));
 
-const fetchLatestRelease = vi.fn();
+const { fetchLatestRelease } = vi.hoisted(() => ({
+  fetchLatestRelease: vi.fn(),
+}));
 
 vi.mock('./updater', async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>;
