@@ -21,7 +21,7 @@ import {
   type ServiceId,
 } from '../lib/settings';
 
-const SERVICES: ServiceId[] = ['hub', 'nebula', 'relay'];
+const SERVICES: ServiceId[] = ['hub', 'nebula', 'relay', 'sol'];
 
 type TestState = { status: 'idle' | 'testing' | 'ok' | 'err'; message?: string };
 
@@ -31,11 +31,13 @@ export function SettingsScreen() {
     hub: null,
     nebula: null,
     relay: null,
+    sol: null,
   });
   const [tests, setTests] = useState<Record<ServiceId, TestState>>({
     hub: { status: 'idle' },
     nebula: { status: 'idle' },
     relay: { status: 'idle' },
+    sol: { status: 'idle' },
   });
   const [saved, setSaved] = useState(false);
 
