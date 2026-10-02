@@ -1,0 +1,51 @@
+/*
+ * Quantum — Tailwind v4 entry CSS.
+ *
+ * Order and layering follow the DSECT design-system's untitled/README.md
+ * VERBATIM. Layers are not optional: unlayered rules beat every Tailwind
+ * utility, whatever the specificity (measured in the spike). Untitled's
+ * globals.css is deliberately NOT imported — it defines `dark:` as
+ * `.dark-mode`; the dsect-theme bridge replaces that with [data-theme="dark"].
+ */
+
+@import "tailwindcss";
+@import "../vendor/untitled/styles/theme.css";
+@import "../vendor/untitled/styles/typography.css";
+@import "../vendor/design-system/fonts.css";
+@import "../vendor/design-system/tokens.css";
+@import "../vendor/design-system/untitled/dsect-theme.css";
+@import "../vendor/design-system/base.css" layer(base);
+@import "../vendor/design-system/components.css" layer(components);
+
+@plugin "@tailwindcss/typography";
+@plugin "tailwindcss-react-aria-components";
+@plugin "tailwindcss-animate";
+
+/* Scan the vendored sources for utility classes, not just src/. */
+@source "../vendor/untitled";
+@source "../vendor/design-system/react/src";
+
+/* Copied from Untitled UI React's globals.css (per untitled/README.md):
+   its two @utility blocks and the `label` / `focus-input-within` variants.
+   NOT copied: its `dark:` custom-variant (the bridge redefines it) and its
+   html/body element rules (DSECT base.css owns those). */
+@custom-variant label (& [data-label]);
+@custom-variant focus-input-within (&:has(input:focus));
+
+@utility scrollbar-hide {
+    /* For Webkit-based browsers (Chrome, Safari and Opera) */
+    &::-webkit-scrollbar {
+        display: none;
+        -webkit-appearance: none;
+    }
+
+    /* For IE, Edge and Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
+@utility transition-inherit-all {
+    transition-property: inherit;
+    transition-duration: inherit;
+    transition-timing-function: inherit;
+}
