@@ -19,7 +19,9 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 22+ required: undici 8 (via jsdom 30) uses
+          # worker_threads.markAsUncloneable, added in Node 22.3.0.
+          node-version: 24
           cache: npm
 
       - name: Set up Java
