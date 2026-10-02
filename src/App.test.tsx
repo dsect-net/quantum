@@ -28,7 +28,7 @@ describe('App shell', () => {
     expect(home).toHaveAttribute('aria-current', 'page');
   });
 
-  it('switches tabs and shows honest Phase-4 placeholders', () => {
+  it('shows the real Create module (honest demo state when Nebula is unconfigured)', () => {
     render(<App />);
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     const create = Array.from(nav.querySelectorAll('button')).find(
@@ -36,8 +36,15 @@ describe('App shell', () => {
     )!;
     fireEvent.click(create);
     expect(screen.getAllByText('Create').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/Coming soon — Phase 4/)).toBeInTheDocument();
-    expect(screen.getByText(/Nebula API/)).toBeInTheDocument();
+    // Create is built now: sub-views + the honest degraded state, no Phase-4 placeholder.
+    const tabs = screen.getByRole('tablist', { name: 'Create views' });
+    for (const label of ['New', 'Jobs', 'Gallery']) {
+      expect(
+        Array.from(tabs.querySelectorAll('button')).some((b) => b.textContent === label),
+      ).toBe(true);
+    }
+    // No Nebula URL in test settings → DemoBanner, naming the fix.
+    expect(screen.getByText(/No Nebula base URL configured/)).toBeInTheDocument();
   });
 
   it('reaches the real Connection settings screen from More', () => {
