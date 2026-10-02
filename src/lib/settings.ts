@@ -107,6 +107,11 @@ export function validateBaseUrl(raw: unknown): string | null {
   return null;
 }
 
+/** True when the user has entered an MCP worker key. */
+export function mcpKeyConfigured(settings: QuantumSettings): boolean {
+  return settings.mcpKey.trim().length > 0;
+}
+
 /** True when no service has a configured base URL — the app must say so honestly. */
 export function isDemoMode(settings: QuantumSettings): boolean {
   return !settings.hub.baseUrl && !settings.nebula.baseUrl && !settings.relay.baseUrl;

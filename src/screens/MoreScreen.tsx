@@ -1,6 +1,6 @@
 /**
- * More tab: secondary destinations. Everything not built yet says so
- * honestly (Phase 4); Connection settings and About are real today.
+ * More tab: secondary destinations. Badges say plainly what each screen
+ * shows: Live, Snapshot, or On-device. Nothing here pretends.
  */
 import { Badge } from '@dsect/ui/components/feedback';
 import { Card } from '@dsect/ui/components/surfaces';
@@ -15,43 +15,43 @@ interface Row {
   id: MoreRoute;
   title: string;
   text: string;
-  badge: 'Phase 4' | 'Live';
-  tone: 'slate' | 'ok';
+  badge: 'Live' | 'Snapshot' | 'On-device';
+  tone: 'ok' | 'warn' | 'info';
 }
 
 const ROWS: Row[] = [
   {
     id: 'services',
     title: 'Services & tools',
-    text: 'hub-api dsect_* tools (mail, calendar, drive, codex, github, home assistant, service logs).',
-    badge: 'Phase 4',
-    tone: 'slate',
+    text: 'hub-api MCP gateway: connect with your worker key and run read-only dsect_* tools.',
+    badge: 'Live',
+    tone: 'ok',
   },
   {
     id: 'memory',
     title: 'Memory explorer',
-    text: 'hive-memory feed, graph, table, analytics — over a labeled static snapshot until a memory API exists.',
-    badge: 'Phase 4',
-    tone: 'slate',
+    text: 'hive-memory feed over a vendored static snapshot — no live backend exists.',
+    badge: 'Snapshot',
+    tone: 'warn',
   },
   {
     id: 'research',
     title: 'Research hub',
-    text: 'Projects, documents, markdown export. Local-only until sync exists.',
-    badge: 'Phase 4',
-    tone: 'slate',
+    text: 'Projects and markdown documents. Records stay on this device.',
+    badge: 'On-device',
+    tone: 'info',
   },
   {
     id: 'about',
     title: 'About Quantum',
-    text: 'What this app is and what it is not.',
+    text: 'What this app is, DSECT divisions and principles (from dsect.dev).',
     badge: 'Live',
     tone: 'ok',
   },
   {
     id: 'settings',
     title: 'Connection settings',
-    text: 'Per-service base URLs, recommended tailnet quick-fills, connection tests.',
+    text: 'Per-service base URLs, credentials, theme, diagnostics.',
     badge: 'Live',
     tone: 'ok',
   },
