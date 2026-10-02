@@ -90,29 +90,40 @@ export function useUpdater() {
       }
       set({ status: 'checking', error: null, progress: 0, needsInstallPermission: false });
       debugLog('updater', 'Checking for updates…');
-      try {
-        const [installed, release] = await Promise.all([
-          getInstalledBuild(),
-          fetchLatestRelease(),
-        ]);
-        if (isUpdateAvailable(installed, release)) {
-          debugLog('updater', `Update available: ${describeRelease(release)}`);
-          set({ status: 'update-available', installed, release });
-        } else {
-          debugLog('updater', `Up to date (build ${installed.versionCode}).`);
-          set({ status: 'up-to-date', installed, release });
-        }
-      } catch (e) {
+      // allSettled, not all: a release-fetch failure must never blank the
+      // Installed readout — the two halves are independent facts.
+      const [installedRes, releaseRes] = await Promise.allSettled([
+        getInstalledBuild(),
+        fetchLatestRelease(),
+      ]);
+      const installed = installedRes.status === 'fulfilled' ? installedRes.value : null;
+      if (releaseRes.status === 'rejected') {
+        const e = releaseRes.reason;
         if (silent) {
           debugLog(
             'updater',
             `Silent check failed: ${e instanceof Error ? e.message : String(e)}`,
             'warn',
           );
-          set({ status: 'idle' });
+          set({ status: 'idle', installed });
         } else {
+          if (installed) set({ installed });
           fail(e);
         }
+        return;
+      }
+      const release = releaseRes.value;
+      if (!installed) {
+        // Extremely unlikely (App.getInfo failed) — still report the release.
+        fail(new UpdaterError('network', 'Could not read the installed app version.'));
+        return;
+      }
+      if (isUpdateAvailable(installed, release)) {
+        debugLog('updater', `Update available: ${describeRelease(release)}`);
+        set({ status: 'update-available', installed, release });
+      } else {
+        debugLog('updater', `Up to date (build ${installed.versionCode}).`);
+        set({ status: 'up-to-date', installed, release });
       }
     },
     [fail, set],

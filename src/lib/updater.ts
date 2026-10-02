@@ -3,9 +3,13 @@
  *
  * The rolling release lives at:
  *   https://api.github.com/repos/dsect-net/quantum/releases/tags/latest
- * CI publishes every main build there (tag `latest`, prerelease) with two
- * assets: `app-debug.apk` and `version.json`
- *   { versionCode, versionName, commitSha, builtAt }.
+ * CI publishes every main build there (tag `latest`, prerelease) with the
+ * APK plus a version payload embedded as an HTML comment in the release
+ * body (`<!-- quantum-version: {...} -->`). The app reads the version from
+ * the CORS-clean api.github.com response — the version.json *asset* is only
+ * a fallback for older releases, because its browser_download_url 302s to
+ * release-assets.githubusercontent.com (no ACAO header → CORS TypeError in
+ * the Android WebView).
  * The app compares the release's versionCode against the installed
  * versionCode (Capacitor App.getInfo().build on Android).
  *
@@ -154,6 +158,42 @@ interface VersionJson {
   builtAt: string;
 }
 
+/**
+ * CI embeds the version payload in the release *body* as an HTML comment
+ * (invisible on github.com) so the app can read it from the CORS-clean
+ * api.github.com response — no second fetch needed:
+ *
+ *   <!-- quantum-version: {"versionCode":6,"versionName":"2026.10.02-6","commitSha":"…","builtAt":"…"} -->
+ *
+ * The version.json asset fetch is kept as a fallback for older releases,
+ * but it 302s to release-assets.githubusercontent.com which sends no
+ * Access-Control-Allow-Origin — inside the Android WebView that fetch dies
+ * with a CORS TypeError. The body comment is the primary path.
+ */
+export const VERSION_COMMENT_RE = /<!--\s*quantum-version:\s*(\{.*?\})\s*-->/;
+
+/**
+ * Parse the embedded version comment out of a release body.
+ * Returns the VersionJson on success, null when no comment is present or
+ * the JSON is malformed (callers fall back to the version.json asset).
+ */
+export function parseVersionComment(body: string | null | undefined): VersionJson | null {
+  if (!body) return null;
+  const match = VERSION_COMMENT_RE.exec(body);
+  if (!match) return null;
+  try {
+    return parseVersionJson(JSON.parse(match[1]));
+  } catch {
+    return null;
+  }
+}
+
+/** Remove embedded version comment(s) so release notes display cleanly. */
+export function stripVersionComment(body: string | null | undefined): string {
+  if (!body) return '';
+  return body.replace(new RegExp(VERSION_COMMENT_RE.source, 'g'), '').trim();
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
@@ -180,10 +220,14 @@ export function parseVersionJson(raw: unknown): VersionJson {
 }
 
 /**
- * Fetch the rolling release and its version.json. Throws:
+ * Fetch the rolling release. Version info comes from the embedded
+ * `quantum-version` HTML comment in the release body (CORS-clean); the
+ * version.json asset is a fallback for older releases. Throws:
  *  - UpdaterError('not-found') when no `latest` release exists yet (404)
  *  - UpdaterError('network') on transport failure
- *  - UpdaterError('bad-release') when the release lacks version.json/APK
+ *  - UpdaterError('bad-release') when the release has no usable version info
+ *    or no APK (includes the WebView CORS case on the asset fallback —
+ *    that's a broken release path, not a network outage)
  */
 export async function fetchLatestRelease(
   fetchFn: typeof fetch = fetch,
@@ -227,15 +271,44 @@ export async function fetchLatestRelease(
   }
   const release = body as unknown as ReleaseApiResponse;
 
-  const versionAsset = release.assets.find((a) => a.name === 'version.json');
-  if (!versionAsset) {
-    throw new UpdaterError('bad-release', 'Release is missing its version.json asset.');
-  }
   const apkAsset = release.assets.find((a) => a.name.endsWith('.apk'));
   if (!apkAsset) {
     throw new UpdaterError('bad-release', 'Release has no APK attached yet.');
   }
 
+  // Primary path: version info embedded in the release body by CI.
+  // No second fetch, no CORS trap.
+  const fromComment = parseVersionComment(release.body);
+  const version =
+    fromComment ?? (await fetchVersionAsset(fetchFn, release.assets, timeoutMs));
+
+  return {
+    tagName: String(release.tag_name ?? 'latest'),
+    versionCode: version.versionCode,
+    versionName: version.versionName,
+    commitSha: version.commitSha,
+    builtAt: version.builtAt,
+    apkUrl: apkAsset.browser_download_url,
+    notes: stripVersionComment(release.body),
+  };
+}
+
+/**
+ * Fallback for releases predating the embedded version comment: fetch the
+ * version.json asset. A failure here (including the Android WebView CORS
+ * TypeError from the release-assets redirect) means the release can't be
+ * read — 'bad-release', never 'network': the metadata fetch above already
+ * proved the network works.
+ */
+async function fetchVersionAsset(
+  fetchFn: typeof fetch,
+  assets: ReleaseAsset[],
+  timeoutMs: number,
+): Promise<VersionJson> {
+  const versionAsset = assets.find((a) => a.name === 'version.json');
+  if (!versionAsset) {
+    throw new UpdaterError('bad-release', 'Release is missing its version info.');
+  }
   const vctrl = new AbortController();
   const vtimer = setTimeout(() => vctrl.abort(), timeoutMs);
   let versionRaw: unknown;
@@ -251,17 +324,7 @@ export async function fetchLatestRelease(
   } finally {
     clearTimeout(vtimer);
   }
-
-  const version = parseVersionJson(versionRaw);
-  return {
-    tagName: String(release.tag_name ?? 'latest'),
-    versionCode: version.versionCode,
-    versionName: version.versionName,
-    commitSha: version.commitSha,
-    builtAt: version.builtAt,
-    apkUrl: apkAsset.browser_download_url,
-    notes: String(release.body ?? ''),
-  };
+  return parseVersionJson(versionRaw);
 }
 
 /** True when the release is newer than what's installed. */

@@ -23,6 +23,7 @@ import { QToggle } from './lib/untitled';
 import { loadDebugMode, storeDebugMode, debugLog } from './lib/debug';
 import { useUpdater } from './lib/useUpdater';
 import { UpdatePrompt } from './components/UpdatePrompt';
+import { TailscaleBadge } from './components/TailscaleBadge';
 import { getUpdaterSettings } from './lib/updater';
 import { Capacitor } from '@capacitor/core';
 import { HomeScreen } from './screens/HomeScreen';
@@ -210,12 +211,15 @@ export default function App() {
             ) : undefined
           }
           actions={
-            <QToggle
-              size="sm"
-              aria-label="Debug mode"
-              isSelected={debugMode}
-              onChange={onDebugToggle}
-            />
+            <>
+              <TailscaleBadge onPress={openSettings} />
+              <QToggle
+                size="sm"
+                aria-label="Debug mode"
+                isSelected={debugMode}
+                onChange={onDebugToggle}
+              />
+            </>
           }
         />
       }

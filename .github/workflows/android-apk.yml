@@ -92,10 +92,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           APK_PATH="$(ls android/app/build/outputs/apk/debug/*.apk | head -1)"
-          NOTES="$(printf 'Experimental build of Quantum.\n\n- versionName: %s\n- versionCode: %s\n- commit: %s\n- built: %s UTC\n\nRecent changes:\n%s' \
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # The in-app updater reads its version from this HTML comment in the
+          # release body (CORS-clean via api.github.com). The version.json
+          # asset's download URL 302s to a host with no ACAO header, which the
+          # Android WebView blocks — so the comment is the primary path and
+          # the asset stays only as a fallback / for humans.
+          VERSION_COMMENT="<!-- quantum-version: {\"versionCode\": ${{ env.VERSION_CODE }}, \"versionName\": \"${{ env.VERSION_NAME }}\", \"commitSha\": \"${{ github.sha }}\", \"builtAt\": \"$BUILT_AT\"} -->"
+          NOTES="$(printf 'Experimental build of Quantum.\n\n- versionName: %s\n- versionCode: %s\n- commit: %s\n- built: %s UTC\n\nRecent changes:\n%s\n\n%s' \
             "${{ env.VERSION_NAME }}" "${{ env.VERSION_CODE }}" "${{ github.sha }}" \
             "$(date -u '+%Y-%m-%d %H:%M')" \
-            "$(git log -8 --pretty=format:'- %s')")"
+            "$(git log -8 --pretty=format:'- %s')" \
+            "$VERSION_COMMENT")"
           # One moving target: delete the old `latest` release (and its tag),
           # then re-create it with the fresh APK + version.json.
           gh release delete latest --yes --cleanup-tag || true

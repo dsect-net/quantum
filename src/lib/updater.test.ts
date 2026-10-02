@@ -12,8 +12,10 @@ import {
   getUpdaterSettings,
   isUpdateAvailable,
   mayDownloadNow,
+  parseVersionComment,
   parseVersionJson,
   saveUpdaterSettings,
+  stripVersionComment,
 } from './updater';
 
 const VERSION_JSON = {
@@ -169,6 +171,113 @@ describe('fetchLatestRelease', () => {
       'https://example.com/version.json': { status: 200, json: { nope: true } },
     });
     await expect(fetchLatestRelease(fetchFn)).rejects.toMatchObject({ code: 'bad-release' });
+  });
+
+  it('prefers the embedded version comment and never fetches the asset', async () => {
+    const body =
+      '## Changes\n- things\n\n<!-- quantum-version: {"versionCode":43,"versionName":"2026.10.02-43","commitSha":"deadbeef","builtAt":"2026-10-02T16:00:00Z"} -->';
+    // Note: no handler for the version.json URL — mockFetch throws on any
+    // unexpected fetch, so this proves the asset is never requested.
+    const fetchFn = mockFetch({ [RELEASE_URL]: { status: 200, json: releaseApi({ body }) } });
+    const r = await fetchLatestRelease(fetchFn);
+    expect(r.versionCode).toBe(43);
+    expect(r.versionName).toBe('2026.10.02-43');
+    expect(r.commitSha).toBe('deadbeef');
+    expect(r.notes).toContain('Changes');
+    expect(r.notes).not.toContain('quantum-version');
+  });
+
+  it('falls back to the version.json asset when the body has no comment (older releases)', async () => {
+    const fetchFn = mockFetch({
+      [RELEASE_URL]: { status: 200, json: releaseApi() },
+      'https://example.com/version.json': { status: 200, json: VERSION_JSON },
+    });
+    const r = await fetchLatestRelease(fetchFn);
+    expect(r.versionCode).toBe(42);
+  });
+
+  it('falls back to the asset when the comment JSON is malformed', async () => {
+    const body = 'notes\n<!-- quantum-version: {not json} -->';
+    const fetchFn = mockFetch({
+      [RELEASE_URL]: { status: 200, json: releaseApi({ body }) },
+      'https://example.com/version.json': { status: 200, json: VERSION_JSON },
+    });
+    const r = await fetchLatestRelease(fetchFn);
+    expect(r.versionCode).toBe(42);
+  });
+
+  it('treats an asset-fetch CORS-style failure as bad-release, not network', async () => {
+    // In the Android WebView the asset fetch dies with a TypeError (no
+    // ACAO header on the redirect target) — that is a broken release
+    // path, not a network outage: the metadata fetch above succeeded.
+    const fetchFn = mockFetch({
+      [RELEASE_URL]: { status: 200, json: releaseApi() },
+      'https://example.com/version.json': { throws: new TypeError('Failed to fetch') },
+    });
+    await expect(fetchLatestRelease(fetchFn)).rejects.toMatchObject({ code: 'bad-release' });
+  });
+
+  it('throws bad-release when neither comment nor version.json asset exists', async () => {
+    const fetchFn = mockFetch({
+      [RELEASE_URL]: {
+        status: 200,
+        json: releaseApi({
+          assets: [{ name: 'app-debug.apk', browser_download_url: 'https://example.com/a.apk' }],
+        }),
+      },
+    });
+    await expect(fetchLatestRelease(fetchFn)).rejects.toMatchObject({ code: 'bad-release' });
+  });
+});
+
+describe('parseVersionComment', () => {
+  const comment =
+    '<!-- quantum-version: {"versionCode":7,"versionName":"2026.10.02-7","commitSha":"abc","builtAt":"2026-10-02T17:00:00Z"} -->';
+
+  it('parses a valid embedded comment', () => {
+    const v = parseVersionComment(`Some notes\n\n${comment}\n`);
+    expect(v).toMatchObject({ versionCode: 7, versionName: '2026.10.02-7' });
+  });
+
+  it('returns null when no comment is present', () => {
+    expect(parseVersionComment('## Changes\n- things')).toBeNull();
+    expect(parseVersionComment('')).toBeNull();
+    expect(parseVersionComment(null)).toBeNull();
+  });
+
+  it('returns null when the comment JSON is malformed', () => {
+    expect(parseVersionComment('<!-- quantum-version: {oops} -->')).toBeNull();
+  });
+
+  it('returns null when the comment fails version validation', () => {
+    expect(
+      parseVersionComment('<!-- quantum-version: {"versionCode":"x","versionName":"y"} -->'),
+    ).toBeNull();
+  });
+
+  it('takes the first comment when several are present', () => {
+    const body = `${comment}\n<!-- quantum-version: {"versionCode":99,"versionName":"z","commitSha":"","builtAt":""} -->`;
+    expect(parseVersionComment(body)?.versionCode).toBe(7);
+  });
+
+  it('tolerates whitespace variants', () => {
+    const v = parseVersionComment(
+      '<!--quantum-version:{"versionCode":8,"versionName":"n","commitSha":"","builtAt":""}-->',
+    );
+    expect(v?.versionCode).toBe(8);
+  });
+});
+
+describe('stripVersionComment', () => {
+  it('removes the comment and trims the notes', () => {
+    expect(stripVersionComment('Notes here\n\n<!-- quantum-version: {"a":1} -->\n')).toBe(
+      'Notes here',
+    );
+  });
+
+  it('leaves clean bodies alone', () => {
+    expect(stripVersionComment('## Changes')).toBe('## Changes');
+    expect(stripVersionComment(null)).toBe('');
   });
 });
 
