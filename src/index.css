@@ -49,3 +49,77 @@
     transition-duration: inherit;
     transition-timing-function: inherit;
 }
+
+/* ------------------------------------------------------------------ */
+/* Quantum app overrides (Oct 2026 feedback round).                    */
+/* These sit outside the kit layers on purpose: they are product       */
+/* decisions Scotty made for Quantum, not design-system changes.       */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Stationary bottom tab bar. The kit's `.tabbar` is `position: sticky`,
+ * which visibly shifts during overscroll rubber-banding ("end of scroll
+ * animation"). Quantum pins it: the bar never moves, on any scroll.
+ */
+@media (max-width: 760px) {
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+  /* Keep last content clear of the fixed bar: bar height + safe inset. */
+  .app__main {
+    padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4));
+  }
+}
+
+/*
+ * Full-screen with bezel respect. viewport-fit=cover is set in index.html;
+ * the kit already pads appbar/tabbar with the safe-area env tokens
+ * (appbar includes --safe-top; tabbar includes --safe-bottom), and the
+ * fixed tabbar above keeps the gesture bar clear. No extra shell padding:
+ * the kit's tokens are the single source of truth here.
+ */
+
+/* Smooth animated transitions between tabs. The screen wrapper remounts
+   (keyed by tab+route in App.tsx) so each switch plays the enter motion. */
+@keyframes quantum-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.quantum-screen {
+  animation: quantum-screen-in 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quantum-screen {
+    animation: none;
+  }
+}
+
+/* Long-pressable elements: no iOS callout, no text selection while held. */
+[data-longpress] {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Subtle debug-mode badge in the app bar (Scotty-only toggle). */
+.debug-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-inline-start: 8px;
+  vertical-align: middle;
+}

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Monitor, Send, X } from 'lucide-react';
 import { Badge, EmptyState, Spinner } from '@dsect/ui/components/feedback';
 import { Dialog } from '@dsect/ui/components/overlays';
-import { QButton } from '../../lib/untitled';
+import { QButton, QInput } from '../../lib/untitled';
 import { DemoBanner } from '../../components/DemoBanner';
 import {
   agentActivityLine,
@@ -329,12 +329,12 @@ function DmThread({ baseUrl, agent }: { baseUrl: string; agent: FleetAgent; onCl
           void send();
         }}
       >
-        <input
-          className="min-h-[44px] flex-1 rounded-lg border border-border-secondary bg-bg-primary px-3 text-base outline-none focus:border-text-brand-secondary"
+        <QInput
+          className="flex-1"
           placeholder={`Message ${agent.name}…`}
           value={draft}
-          disabled={sending}
-          onChange={(e) => setDraft(e.target.value)}
+          isDisabled={sending}
+          onChange={(v) => setDraft(v)}
           aria-label={`Message ${agent.name}`}
         />
         <QButton color="primary" size="lg" onPress={() => void send()} isDisabled={!draft.trim() || sending} aria-label="Send DM">

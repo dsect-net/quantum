@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2, RefreshCw, MessageSquare } from 'lucide-react';
 import { Badge, EmptyState, Spinner } from '@dsect/ui/components/feedback';
+import { SelectField } from '@dsect/ui/components/forms';
 import { QButton } from '../../lib/untitled';
 import { DemoBanner } from '../../components/DemoBanner';
 import { ago, fetchModels, SolApiError, type SolModel } from '../../api/sol';
@@ -151,13 +152,11 @@ export function ChatPane({ baseUrl }: { baseUrl: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-end gap-2">
-        <label className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="text-xs font-medium text-text-secondary">Model</span>
-          <select
-            className="min-h-[44px] rounded-lg border border-border-secondary bg-bg-primary px-3 text-base outline-none focus:border-text-brand-secondary"
+        <div className="min-w-0 flex-1">
+          <SelectField
+            label="Model"
             value={model}
             onChange={(e) => pickModel(e.target.value)}
-            aria-label="Chat model"
           >
             {models.length === 0 && <option value="">No models reported</option>}
             {models.map((m) => (
@@ -165,8 +164,8 @@ export function ChatPane({ baseUrl }: { baseUrl: string }) {
                 {m.id}
               </option>
             ))}
-          </select>
-        </label>
+          </SelectField>
+        </div>
         <QButton color="primary" size="lg" onPress={newConversation} aria-label="New conversation">
           <Plus size={18} />
           New

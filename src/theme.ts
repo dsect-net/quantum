@@ -1,12 +1,13 @@
 /**
- * Quantum theme boot. DSECT is dark-first: Quantum boots dark and persists
- * the choice. Two things must agree:
+ * Quantum theme boot. Scotty chose the DSECT Light theme as the default
+ * (Oct 2026 feedback round) — the choice persists across launches.
+ * Two things must agree:
  *
- *  1. The design-system kit's `setTheme('dark')` — the canonical call.
- *  2. A literal `data-theme="dark"` attribute on <html> — the kit's
+ *  1. The design-system kit's `setTheme('light')` — the canonical call.
+ *  2. A literal `data-theme="light"` attribute on <html> — the kit's
  *     `setTheme('dark')` *removes* the attribute, but the Untitled bridge
- *     (`untitled/dsect-theme.css`) and tokens.css drive dark mode off
- *     `[data-theme="dark"]`, so Quantum sets it explicitly.
+ *     (`untitled/dsect-theme.css`) and tokens.css drive theming off the
+ *     explicit `[data-theme]` attribute, so Quantum always sets it.
  */
 import { setTheme as kitSetTheme } from '@dsect/ui/theme';
 import type { Theme } from '@dsect/ui/theme';
@@ -52,7 +53,7 @@ export function applyTheme(theme: Theme): void {
 
 export async function bootTheme(): Promise<Theme> {
   const stored = await readStored();
-  const theme: Theme = stored ?? 'dark'; // dark-first default
+  const theme: Theme = stored ?? 'light'; // DSECT Light default (Scotty's call)
   applyTheme(theme);
   return theme;
 }

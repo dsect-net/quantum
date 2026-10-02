@@ -25,6 +25,7 @@ import {
   type QuantumSettings,
   type ServiceId,
 } from '../lib/settings';
+import { MAIL_META, mailStatusLine, testMailConnection } from '../lib/mail-settings';
 
 const SERVICES: ServiceId[] = ['hub', 'nebula', 'relay', 'sol'];
 
@@ -45,9 +46,10 @@ export function SettingsScreen() {
     sol: { status: 'idle' },
   });
   const [saved, setSaved] = useState(false);
+  const [mailTest, setMailTest] = useState<TestState>({ status: 'idle' });
   const [theme, setTheme] = useState<Theme>(() => {
     const t = document.documentElement.getAttribute('data-theme');
-    return t === 'light' ? 'light' : 'dark'; // dark-first boot
+    return t === 'light' ? 'light' : 'dark'; // DSECT Light boot
   });
 
   async function onThemeToggle(dark: boolean) {
@@ -95,6 +97,19 @@ export function SettingsScreen() {
   async function onSave() {
     await saveSettings(settings);
     setSaved(true);
+  }
+
+  async function testMail() {
+    setMailTest({ status: 'testing' });
+    try {
+      const { mailbox } = await testMailConnection(settings.hub.baseUrl, settings.mcpKey);
+      setMailTest({ status: 'ok', message: `Connected — ${mailbox}` });
+    } catch (e) {
+      setMailTest({
+        status: 'err',
+        message: e instanceof Error ? e.message : 'Connection failed',
+      });
+    }
   }
 
   const hasErrors = SERVICES.some((s) => errors[s] !== null);
@@ -163,6 +178,41 @@ export function SettingsScreen() {
 
       <Card>
         <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-semibold">{MAIL_META.label}</h3>
+            {mailTest.status === 'ok' && (
+              <Badge tone="ok" size="sm" dot>
+                {mailTest.message ?? 'Connected'}
+              </Badge>
+            )}
+            {mailTest.status === 'err' && (
+              <Badge tone="err" size="sm" dot>
+                Failed
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-text-secondary">{MAIL_META.description}</p>
+          <p className="text-sm text-text-secondary">{mailStatusLine(settings)}</p>
+          {mailTest.message && mailTest.status !== 'ok' && (
+            <p className="text-sm text-text-danger">{mailTest.message}</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <QButton
+              color="secondary"
+              size="md"
+              onPress={() => void testMail()}
+              isDisabled={mailTest.status === 'testing'}
+              isLoading={mailTest.status === 'testing'}
+            >
+              Test mail connection
+            </QButton>
+          </div>
+          <p className="text-xs text-text-tertiary">{MAIL_META.note}</p>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col gap-3">
           <h3 className="font-semibold">Credentials (this device only)</h3>
           <QInput
             label="MCP worker key"
@@ -199,7 +249,7 @@ export function SettingsScreen() {
             <span>
               <span className="block font-medium">Dark theme</span>
               <span className="block text-sm text-text-secondary">
-                DSECT is dark-first; light is available. The choice is
+                DSECT Light is the default; dark is available. The choice is
                 remembered on this device.
               </span>
             </span>

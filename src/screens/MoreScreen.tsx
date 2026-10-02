@@ -5,10 +5,12 @@
 import { Badge } from '@dsect/ui/components/feedback';
 import { Card } from '@dsect/ui/components/surfaces';
 
-export type MoreRoute = 'services' | 'memory' | 'research' | 'about' | 'settings';
+export type MoreRoute = 'services' | 'memory' | 'research' | 'about' | 'settings' | 'debug';
 
 export interface MoreScreenProps {
   onNavigate: (route: MoreRoute) => void;
+  /** Revealed by the Scotty-only debug toggle in the app bar. */
+  showDebug?: boolean;
 }
 
 interface Row {
@@ -57,10 +59,22 @@ const ROWS: Row[] = [
   },
 ];
 
-export function MoreScreen({ onNavigate }: MoreScreenProps) {
+export function MoreScreen({ onNavigate, showDebug = false }: MoreScreenProps) {
+  const rows: Row[] = showDebug
+    ? [
+        {
+          id: 'debug',
+          title: 'Debug tools',
+          text: 'Connection diagnostics, settings inspector, log viewer. Scotty-only.',
+          badge: 'Live',
+          tone: 'warn',
+        },
+        ...ROWS,
+      ]
+    : ROWS;
   return (
     <div className="flex flex-col gap-3 p-4">
-      {ROWS.map((row) => (
+      {rows.map((row) => (
         <Card key={row.id}>
           <button
             type="button"
