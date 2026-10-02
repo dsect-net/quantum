@@ -2,12 +2,17 @@ name: Android APK
 
 on:
   workflow_dispatch:
+  # Every main push refreshes the rolling `latest` release, which is what
+  # the in-app updater checks. Weekly schedule kept as a backstop.
+  push:
+    branches: [main]
   schedule:
     # Weekly debug build, Mondays 09:00 UTC
     - cron: "0 9 * * 1"
 
+# contents: write is required for the rolling-release publish step below.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -69,3 +74,35 @@ jobs:
           name: quantum-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Write version.json
+        run: |
+          cat > version.json <<EOF
+          {
+            "versionCode": ${{ env.VERSION_CODE }},
+            "versionName": "${{ env.VERSION_NAME }}",
+            "commitSha": "${{ github.sha }}",
+            "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          cat version.json
+
+      - name: Publish rolling release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK_PATH="$(ls android/app/build/outputs/apk/debug/*.apk | head -1)"
+          NOTES="$(printf 'Experimental build of Quantum.\n\n- versionName: %s\n- versionCode: %s\n- commit: %s\n- built: %s UTC\n\nRecent changes:\n%s' \
+            "${{ env.VERSION_NAME }}" "${{ env.VERSION_CODE }}" "${{ github.sha }}" \
+            "$(date -u '+%Y-%m-%d %H:%M')" \
+            "$(git log -8 --pretty=format:'- %s')")"
+          # One moving target: delete the old `latest` release (and its tag),
+          # then re-create it with the fresh APK + version.json.
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest \
+            --prerelease \
+            --title "Experimental build" \
+            --notes "$NOTES" \
+            "$APK_PATH" version.json
+          gh release view latest --json tagName,assets --jq \
+            '{tag: .tagName, assets: [.assets[].name]}'
