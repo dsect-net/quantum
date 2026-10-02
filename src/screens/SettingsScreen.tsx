@@ -11,6 +11,8 @@ import { useState } from 'react';
 import { Card } from '@dsect/ui/components/surfaces';
 import { Badge } from '@dsect/ui/components/feedback';
 import { QButton, QInput, QToggle } from '../lib/untitled';
+import { useUpdater } from '../lib/useUpdater';
+import { UpdaterCard } from '../components/UpdaterCard';
 import { applyTheme, storeTheme } from '../theme';
 import type { Theme } from '@dsect/ui/theme';
 import { APP_VERSION } from '../lib/appInfo';
@@ -113,6 +115,7 @@ export function SettingsScreen() {
   }
 
   const hasErrors = SERVICES.some((s) => errors[s] !== null);
+  const updater = useUpdater();
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -261,6 +264,8 @@ export function SettingsScreen() {
           </label>
         </div>
       </Card>
+
+      <UpdaterCard updater={updater} />
 
       <Card>
         <div className="flex flex-col gap-3">

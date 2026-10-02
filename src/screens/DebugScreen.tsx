@@ -21,6 +21,8 @@ import {
 } from '../lib/settings';
 import { clearLog, debugLog, getLog, onLog, type LogEntry } from '../lib/debug';
 import { bootTheme } from '../theme';
+import { useUpdater } from '../lib/useUpdater';
+import { describeRelease } from '../lib/updater';
 
 type ProbeState = 'idle' | 'running' | 'ok' | 'fail';
 
@@ -236,6 +238,62 @@ export function DebugScreen() {
           Coming soon — today, "Reset all settings" is the way back to demo mode.
         </p>
       </Card>
+
+      <UpdaterDiagnostics />
     </div>
+  );
+}
+
+/** Updater internals for Scotty: installed build, release state, force check. */
+function UpdaterDiagnostics() {
+  const updater = useUpdater();
+  const { status, installed, release, error, settings } = updater;
+  return (
+    <Card className="p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
+          Updater diagnostics
+        </h2>
+        <QButton size="sm" onClick={() => updater.check()}>
+          Force check
+        </QButton>
+      </div>
+      <dl className="flex flex-col gap-1 text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Installed build</dt>
+          <dd className="font-mono text-xs">
+            {installed ? `${installed.versionName} (#${installed.versionCode})` : '—'}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Latest release</dt>
+          <dd className="font-mono text-xs">{release ? describeRelease(release) : '—'}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">State</dt>
+          <dd className="font-mono text-xs">{status}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Auto-check on launch</dt>
+          <dd className="font-mono text-xs">{settings.autoCheck ? 'on' : 'off'}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Wi-Fi only</dt>
+          <dd className="font-mono text-xs">{settings.wifiOnly ? 'on' : 'off'}</dd>
+        </div>
+        {release?.commitSha && (
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-text-secondary">Release commit</dt>
+            <dd className="truncate font-mono text-xs">{release.commitSha.slice(0, 12)}</dd>
+          </div>
+        )}
+        {error && (
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-text-secondary">Last error</dt>
+            <dd className="text-right font-mono text-xs text-text-danger">{error}</dd>
+          </div>
+        )}
+      </dl>
+    </Card>
   );
 }

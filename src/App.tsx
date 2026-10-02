@@ -21,6 +21,10 @@ import { IconButton } from '@dsect/ui/components/buttons';
 import type { TabBarItem } from '@dsect/ui/components/app';
 import { QToggle } from './lib/untitled';
 import { loadDebugMode, storeDebugMode, debugLog } from './lib/debug';
+import { useUpdater } from './lib/useUpdater';
+import { UpdatePrompt } from './components/UpdatePrompt';
+import { getUpdaterSettings } from './lib/updater';
+import { Capacitor } from '@capacitor/core';
 import { HomeScreen } from './screens/HomeScreen';
 import { ChatScreen } from './screens/ChatScreen';
 import { CreateScreen } from './screens/CreateScreen';
@@ -167,7 +171,27 @@ export default function App() {
   const inMoreSubscreen = tab === 'more' && moreRoute !== null;
   const screenKey = `${tab}:${moreRoute ?? ''}`;
 
+  // In-app updater: silent launch check (auto-check setting, default on).
+  // Only the "update available" outcome surfaces UI (UpdatePrompt below);
+  // every other outcome stays quiet.
+  const updater = useUpdater();
+  const updaterChecked = useRef(false);
+  useEffect(() => {
+    if (updaterChecked.current) return;
+    updaterChecked.current = true;
+    try {
+      if (getUpdaterSettings().autoCheck && Capacitor.isNativePlatform()) {
+        debugLog('updater', 'Launch auto-check starting.');
+        void updater.check({ silent: true });
+      }
+    } catch {
+      /* never break launch over an update check */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
+    <>
     <AppShell
       appBar={
         <AppBar
@@ -214,5 +238,7 @@ export default function App() {
         {screen}
       </div>
     </AppShell>
+    <UpdatePrompt updater={updater} />
+    </>
   );
 }
