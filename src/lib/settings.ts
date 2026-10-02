@@ -11,10 +11,11 @@
  *  - hub:    hub-api (dashboard endpoints + MCP gateway POST /mcp)
  *  - nebula: Nebula ComfyUI PWA backend (/api/run, /api/status, /api/jobs, /api/gallery)
  *  - relay:  agent-chat Hermes relay (/messages?since=, /recent, /search, /send, /ask)
+ *  - sol:    Sol gateway (OpenAI chat at /api/sol/v1 + fleet agents at /api/sol)
  */
 import { Preferences } from '@capacitor/preferences';
 
-export type ServiceId = 'hub' | 'nebula' | 'relay';
+export type ServiceId = 'hub' | 'nebula' | 'relay' | 'sol';
 
 export interface ServiceConfig {
   /** Base URL, e.g. https://tritium-linux.fairy-chinstrap.ts.net — empty = demo mode. */
@@ -25,6 +26,8 @@ export interface QuantumSettings {
   hub: ServiceConfig;
   nebula: ServiceConfig;
   relay: ServiceConfig;
+  /** Sol gateway base (chat + fleet). Empty = demo mode. */
+  sol: ServiceConfig;
   /** Optional MCP Bearer worker key (hub /mcp). Never logged, never in code. */
   mcpKey: string;
   /** Optional Nebula off-tailnet passphrase. Never logged, never in code. */
@@ -53,6 +56,13 @@ export const SERVICE_META: Record<
     recommended: 'https://team.dsect.net/api/relay',
     testPath: '/recent?limit=1',
   },
+  sol: {
+    label: 'Sol gateway',
+    description:
+      'Conversational AI: OpenAI-compatible chat at /api/sol/v1 and the live fleet agents view at /api/sol. No key in the app — identity is the tailnet.',
+    recommended: 'https://team.dsect.net',
+    testPath: '/api/sol/agents',
+  },
 };
 
 export const SETTINGS_KEY = 'quantum.settings';
@@ -61,6 +71,7 @@ export const EMPTY_SETTINGS: QuantumSettings = Object.freeze({
   hub: { baseUrl: '' },
   nebula: { baseUrl: '' },
   relay: { baseUrl: '' },
+  sol: { baseUrl: '' },
   mcpKey: '',
   nebulaPassphrase: '',
 }) as QuantumSettings;
@@ -109,7 +120,7 @@ export function validateBaseUrl(raw: unknown): string | null {
 
 /** True when no service has a configured base URL — the app must say so honestly. */
 export function isDemoMode(settings: QuantumSettings): boolean {
-  return !settings.hub.baseUrl && !settings.nebula.baseUrl && !settings.relay.baseUrl;
+  return !settings.hub.baseUrl && !settings.nebula.baseUrl && !settings.relay.baseUrl && !settings.sol.baseUrl;
 }
 
 export function getSettings(): QuantumSettings {
@@ -123,6 +134,7 @@ export function getSettings(): QuantumSettings {
     hub: { baseUrl: normalizeBaseUrl((raw.hub as ServiceConfig | undefined)?.baseUrl) },
     nebula: { baseUrl: normalizeBaseUrl((raw.nebula as ServiceConfig | undefined)?.baseUrl) },
     relay: { baseUrl: normalizeBaseUrl((raw.relay as ServiceConfig | undefined)?.baseUrl) },
+    sol: { baseUrl: normalizeBaseUrl((raw.sol as ServiceConfig | undefined)?.baseUrl) },
     mcpKey: String((raw as { mcpKey?: unknown }).mcpKey ?? ''),
     nebulaPassphrase: String((raw as { nebulaPassphrase?: unknown }).nebulaPassphrase ?? ''),
   };
@@ -133,6 +145,7 @@ export async function saveSettings(settings: QuantumSettings): Promise<void> {
     hub: { baseUrl: normalizeBaseUrl(settings.hub.baseUrl) },
     nebula: { baseUrl: normalizeBaseUrl(settings.nebula.baseUrl) },
     relay: { baseUrl: normalizeBaseUrl(settings.relay.baseUrl) },
+    sol: { baseUrl: normalizeBaseUrl(settings.sol.baseUrl) },
     mcpKey: settings.mcpKey,
     nebulaPassphrase: settings.nebulaPassphrase,
   };
