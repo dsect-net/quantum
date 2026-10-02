@@ -8,6 +8,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Badge, EmptyState } from '@dsect/ui/components/feedback';
+import { TextArea } from '@dsect/ui/components/forms';
 import { Card } from '@dsect/ui/components/surfaces';
 import { QButton, QInput } from '../../lib/untitled';
 import {
@@ -95,15 +96,13 @@ function DocumentCard({
                   onChange={setTitle}
                   aria-label="Document title"
                 />
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">Body (markdown)</span>
-                  <textarea
-                    className="min-h-32 rounded border border-border-subtle bg-surface p-2 font-mono text-sm"
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    rows={8}
-                  />
-                </label>
+                <TextArea
+                  label="Body (markdown)"
+                  className="min-h-32 font-mono text-sm"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={8}
+                />
                 <div className="flex gap-2">
                   <QButton color="primary" size="md" onPress={save}>
                     Save

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Send, Square, RotateCcw } from 'lucide-react';
 import { Badge } from '@dsect/ui/components/feedback';
 import { EmptyState } from '@dsect/ui/components/feedback';
+import { TextArea } from '@dsect/ui/components/forms';
 import { QButton } from '../../lib/untitled';
 import {
   SolApiError,
@@ -186,8 +187,9 @@ export function ConversationView({ baseUrl, threadId, onBack, onThreadChange }: 
           send(draft);
         }}
       >
-        <textarea
-          className="min-h-[44px] max-h-32 flex-1 resize-none rounded-lg border border-border-secondary bg-bg-primary p-3 text-base outline-none focus:border-text-brand-secondary"
+        <TextArea
+          label={<span className="sr-only">Message Sol</span>}
+          className="max-h-32 flex-1 resize-none"
           rows={2}
           placeholder={streaming ? 'Sol is replying…' : 'Message Sol…'}
           value={draft}
@@ -199,7 +201,6 @@ export function ConversationView({ baseUrl, threadId, onBack, onThreadChange }: 
               send(draft);
             }
           }}
-          aria-label="Message Sol"
         />
         {streaming ? (
           <QButton color="secondary" size="lg" onPress={stop} aria-label="Stop reply">
