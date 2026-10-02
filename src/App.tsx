@@ -7,8 +7,9 @@
  */
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Home, MessageCircle, Sparkles, Mail, Ellipsis } from 'lucide-react';
+import { Home, MessageCircle, Sparkles, Mail, Ellipsis, ArrowLeft } from 'lucide-react';
 import { AppShell, AppBar, TabBar } from '@dsect/ui/components/app';
+import { IconButton } from '@dsect/ui/components/buttons';
 import type { TabBarItem } from '@dsect/ui/components/app';
 import { HomeScreen } from './screens/HomeScreen';
 import { ChatScreen } from './screens/ChatScreen';
@@ -18,6 +19,9 @@ import { MoreScreen } from './screens/MoreScreen';
 import type { MoreRoute } from './screens/MoreScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { AboutScreen } from './screens/AboutScreen';
+import { ServicesScreen } from './screens/More/ServicesScreen';
+import { HiveScreen } from './screens/More/HiveScreen';
+import { ResearchScreen } from './screens/More/ResearchScreen';
 
 type TabId = 'home' | 'chat' | 'create' | 'messages' | 'more';
 
@@ -51,7 +55,16 @@ export default function App() {
   else if (tab === 'chat') screen = <ChatScreen />;
   else if (tab === 'create') screen = <CreateScreen />;
   else if (tab === 'messages') screen = <MessagesScreen />;
-  else if (moreRoute === 'settings') {
+  else if (moreRoute === 'services') {
+    screen = <ServicesScreen />;
+    title = 'Services & tools';
+  } else if (moreRoute === 'memory') {
+    screen = <HiveScreen />;
+    title = 'Memory explorer';
+  } else if (moreRoute === 'research') {
+    screen = <ResearchScreen />;
+    title = 'Research hub';
+  } else if (moreRoute === 'settings') {
     screen = <SettingsScreen />;
     title = 'Connection settings';
   } else if (moreRoute === 'about') {
@@ -61,9 +74,23 @@ export default function App() {
     screen = <MoreScreen onNavigate={setMoreRoute} />;
   }
 
+  const inMoreSubscreen = tab === 'more' && moreRoute !== null;
+
   return (
     <AppShell
-      appBar={<AppBar title={title} subtitle="Quantum · DSECT" />}
+      appBar={
+        <AppBar
+          title={title}
+          subtitle="Quantum · DSECT"
+          leading={
+            inMoreSubscreen ? (
+              <IconButton label="Back to More" onClick={() => setMoreRoute(null)}>
+                <ArrowLeft size={22} />
+              </IconButton>
+            ) : undefined
+          }
+        />
+      }
       tabBar={<TabBar items={items} current={tab} label="Primary" />}
     >
       {screen}

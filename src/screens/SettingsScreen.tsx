@@ -10,10 +10,15 @@
 import { useState } from 'react';
 import { Card } from '@dsect/ui/components/surfaces';
 import { Badge } from '@dsect/ui/components/feedback';
-import { QButton, QInput } from '../lib/untitled';
+import { QButton, QInput, QToggle } from '../lib/untitled';
+import { applyTheme, storeTheme } from '../theme';
+import type { Theme } from '@dsect/ui/theme';
+import { APP_VERSION } from '../lib/appInfo';
 import {
   SERVICE_META,
   getSettings,
+  isDemoMode,
+  mcpKeyConfigured,
   saveSettings,
   testServiceConnection,
   validateBaseUrl,
@@ -40,6 +45,17 @@ export function SettingsScreen() {
     sol: { status: 'idle' },
   });
   const [saved, setSaved] = useState(false);
+  const [theme, setTheme] = useState<Theme>(() => {
+    const t = document.documentElement.getAttribute('data-theme');
+    return t === 'light' ? 'light' : 'dark'; // dark-first boot
+  });
+
+  async function onThemeToggle(dark: boolean) {
+    const next: Theme = dark ? 'dark' : 'light';
+    setTheme(next);
+    applyTheme(next);
+    await storeTheme(next);
+  }
 
   function updateUrl(service: ServiceId, value: string) {
     setSettings((s) => ({ ...s, [service]: { baseUrl: value } }));
@@ -175,6 +191,98 @@ export function SettingsScreen() {
           </Badge>
         )}
       </div>
+
+      <Card>
+        <div className="flex flex-col gap-3">
+          <h3 className="font-semibold">Appearance</h3>
+          <label className="flex items-center justify-between gap-3">
+            <span>
+              <span className="block font-medium">Dark theme</span>
+              <span className="block text-sm text-text-secondary">
+                DSECT is dark-first; light is available. The choice is
+                remembered on this device.
+              </span>
+            </span>
+            <QToggle
+              aria-label="Dark theme"
+              isSelected={theme === 'dark'}
+              onChange={onThemeToggle}
+            />
+          </label>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col gap-3">
+          <h3 className="font-semibold">About this app · diagnostics</h3>
+          <dl className="flex flex-col gap-1 text-sm">
+            <div className="flex gap-2">
+              <dt className="w-28 shrink-0 text-text-secondary">App</dt>
+              <dd className="font-mono">Quantum {APP_VERSION}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-28 shrink-0 text-text-secondary">Theme</dt>
+              <dd className="font-mono">{theme}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-28 shrink-0 text-text-secondary">Mode</dt>
+              <dd>
+                {isDemoMode(settings) ? (
+                  <Badge tone="warn" size="sm" dot>
+                    Demo mode
+                  </Badge>
+                ) : (
+                  <Badge tone="ok" size="sm" dot>
+                    Configured
+                  </Badge>
+                )}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-28 shrink-0 text-text-secondary">MCP key</dt>
+              <dd>
+                {mcpKeyConfigured(settings) ? (
+                  <Badge tone="ok" size="sm" dot>
+                    Entered
+                  </Badge>
+                ) : (
+                  <Badge tone="slate" size="sm">
+                    Not entered
+                  </Badge>
+                )}
+              </dd>
+            </div>
+          </dl>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-text-secondary">Connection tests</span>
+            {SERVICES.map((service) => {
+              const t = tests[service];
+              return (
+                <div key={service} className="flex items-center justify-between gap-2 text-sm">
+                  <span>{SERVICE_META[service].label}</span>
+                  {t.status === 'ok' ? (
+                    <Badge tone="ok" size="sm" dot>
+                      {t.message ?? 'Connected'}
+                    </Badge>
+                  ) : t.status === 'err' ? (
+                    <Badge tone="err" size="sm" dot>
+                      Failed
+                    </Badge>
+                  ) : (
+                    <Badge tone="slate" size="sm">
+                      Not tested
+                    </Badge>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-text-secondary">
+            Keys never leave this device; they appear here only as "entered /
+            not entered", never as values.
+          </p>
+        </div>
+      </Card>
     </div>
   );
 }
