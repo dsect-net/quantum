@@ -199,6 +199,12 @@ describe('groupIntoThreads', () => {
 describe('formatRelayTime', () => {
   it('formats epoch seconds and tolerates 0', () => {
     expect(formatRelayTime(0)).toBe('');
-    expect(formatRelayTime(1759365600)).toMatch(/Oct 2/);
+    // TZ-robust: compare against the same instant rendered locally, not a
+    // hardcoded UTC date (this box runs America/New_York; CI runs UTC).
+    const localDay = new Date(1759365600 * 1000).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    });
+    expect(formatRelayTime(1759365600)).toContain(localDay);
   });
 });
