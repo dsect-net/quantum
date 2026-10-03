@@ -27,6 +27,7 @@
  *    its own section instead of taking the whole screen down.
  */
 import { normalizeBaseUrl } from '../lib/settings';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
 export type ServiceStatus = 'up' | 'down' | 'degraded' | 'unknown';
 
@@ -206,6 +207,13 @@ export class HubClient {
       ? '?' + new URLSearchParams(params).toString()
       : '';
     const url = this.baseUrl + path + query;
+    // hub-api deliberately serves NO CORS headers on /api/* (the open CORS
+    // surface is scoped to /mcp + OAuth only, for good reason). Inside the
+    // WebView, browser fetch() to these endpoints always "fails" — so on
+    // native we go through CapacitorHttp, which is immune to CORS.
+    if (Capacitor.isNativePlatform()) {
+      return this.nativeGet<T>(url, path);
+    }
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     let res: Response;
@@ -244,6 +252,44 @@ export class HubClient {
         'bad-json',
         `Hub API returned non-JSON for ${path}.`,
         res.status,
+        url,
+      );
+    }
+  }
+
+  /**
+   * Native twin of get(): same contract, but through CapacitorHttp so
+   * CORS-scoped /api/* endpoints actually answer inside the WebView.
+   */
+  private async nativeGet<T>(url: string, path: string): Promise<T> {
+    let status = 0;
+    try {
+      const res = await CapacitorHttp.get({
+        url,
+        headers: { Accept: 'application/json' },
+        connectTimeout: this.timeoutMs,
+        readTimeout: this.timeoutMs,
+      });
+      status = res.status;
+      if (status < 200 || status >= 300) {
+        throw new HubError(
+          'http',
+          `Hub API returned HTTP ${status} for ${path}.`,
+          status,
+          url,
+        );
+      }
+      const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+      return data as T;
+    } catch (err) {
+      if (err instanceof HubError) throw err;
+      if (err instanceof SyntaxError) {
+        throw new HubError('bad-json', `Hub API returned non-JSON for ${path}.`, status, url);
+      }
+      throw new HubError(
+        'network',
+        `Could not reach the Hub API (${url}). Check the tailnet connection.`,
+        undefined,
         url,
       );
     }
