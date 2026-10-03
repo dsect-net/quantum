@@ -11,9 +11,15 @@
  *   offline       — no internet at all (red)
  *   unconfigured  — no tailnet URLs configured; the badge hides itself
  *
- * Every state comes from real fetches. Nothing is inferred from vibes.
+ * Probing is platform-aware. Inside the Android WebView, browser fetch() is
+ * subject to CORS, and tailnet hosts don't send ACAO headers — so a plain
+ * fetch "fails" even when the host is reachable, which used to paint a
+ * false Offline badge. On native we probe with CapacitorHttp (native HTTP,
+ * no CORS) and read internet state from the Network plugin instead.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { Network } from '@capacitor/network';
 import { getSettings, type QuantumSettings } from './settings';
 
 export type TailnetState = 'connected' | 'tailscale-off' | 'offline' | 'unconfigured';
@@ -82,6 +88,22 @@ async function canReach(
 }
 
 /**
+ * Native reachability probe via CapacitorHttp. Native HTTP is not subject
+ * to CORS, so a tailnet host that answers over the VPN counts as reachable
+ * even though its responses carry no Access-Control-Allow-Origin header.
+ * Any HTTP response — even a 404 — proves the host is reachable; only a
+ * transport failure (DNS, refused, timeout) returns false.
+ */
+async function nativeCanReach(url: string, timeoutMs: number): Promise<boolean> {
+  try {
+    await CapacitorHttp.get({ url, connectTimeout: timeoutMs, readTimeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Probe the tailnet, then the open internet, and classify honestly.
  * Order matters: tailnet first (fast fail when Tailscale is off), then the
  * internet check to distinguish "Tailscale off" from "no connection".
@@ -93,6 +115,20 @@ export async function checkTailnetStatus(
 ): Promise<TailnetStatus> {
   const probeUrl = findTailnetUrl(settings);
   if (!probeUrl) return { state: 'unconfigured', probeUrl: null };
+
+  if (Capacitor.isNativePlatform()) {
+    if (await nativeCanReach(probeUrl, timeoutMs)) {
+      return { state: 'connected', probeUrl };
+    }
+    // The OS knows whether we have internet; no CORS-blocked fetch needed.
+    try {
+      const net = await Network.getStatus();
+      return { state: net.connected ? 'tailscale-off' : 'offline', probeUrl };
+    } catch {
+      return { state: 'offline', probeUrl };
+    }
+  }
+
   if (await canReach(fetchFn, probeUrl, timeoutMs)) {
     return { state: 'connected', probeUrl };
   }
