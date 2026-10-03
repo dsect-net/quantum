@@ -1,7 +1,8 @@
 /**
  * Quantum app shell: @dsect/ui AppShell + AppBar + TabBar.
  *
- * Five tabs — Home, Chat, Create, Mail, More — per the finalized plan.
+ * Six tabs — Home, Chat, Create, Collab, Mail, More — per the finalized plan.
+ * The Collab tab is the DSECT collaboration system (goals/boards).
  * The Mail tab is the DSECT email client (name@dsect.net).
  *
  * Shell behaviors (Oct 2026 feedback round):
@@ -15,7 +16,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Home, MessageCircle, Sparkles, Mail, Ellipsis, ArrowLeft } from 'lucide-react';
+import { Home, MessageCircle, Sparkles, Mail, Ellipsis, ArrowLeft, KanbanSquare } from 'lucide-react';
 import { AppShell, AppBar, TabBar } from '@dsect/ui/components/app';
 import { IconButton } from '@dsect/ui/components/buttons';
 import type { TabBarItem } from '@dsect/ui/components/app';
@@ -33,18 +34,20 @@ import { MailScreen } from './screens/Mail/MailScreen';
 import { MoreScreen } from './screens/MoreScreen';
 import type { MoreRoute } from './screens/MoreScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { CollabScreen } from './screens/Collab/CollabScreen';
 import { AboutScreen } from './screens/AboutScreen';
 import { ServicesScreen } from './screens/More/ServicesScreen';
 import { HiveScreen } from './screens/More/HiveScreen';
 import { ResearchScreen } from './screens/More/ResearchScreen';
 import { DebugScreen } from './screens/DebugScreen';
 
-type TabId = 'home' | 'chat' | 'create' | 'mail' | 'more';
+type TabId = 'home' | 'chat' | 'create' | 'collab' | 'mail' | 'more';
 
 const TABS: { id: TabId; label: string; icon: ReactNode; title: string }[] = [
   { id: 'home', label: 'Home', icon: <Home size={22} />, title: 'Home' },
   { id: 'chat', label: 'Chat', icon: <MessageCircle size={22} />, title: 'Chat' },
   { id: 'create', label: 'Create', icon: <Sparkles size={22} />, title: 'Create' },
+  { id: 'collab', label: 'Collab', icon: <KanbanSquare size={22} />, title: 'Collaboration' },
   { id: 'mail', label: 'Mail', icon: <Mail size={22} />, title: 'Mail' },
   { id: 'more', label: 'More', icon: <Ellipsis size={22} />, title: 'More' },
 ];
@@ -139,6 +142,7 @@ export default function App() {
   if (tab === 'home') screen = <HomeScreen />;
   else if (tab === 'chat') screen = <ChatScreen />;
   else if (tab === 'create') screen = <CreateScreen />;
+  else if (tab === 'collab') screen = <CollabScreen />;
   else if (tab === 'mail') screen = <MailScreen />;
   else if (moreRoute === 'services') {
     screen = <ServicesScreen />;
