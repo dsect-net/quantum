@@ -3,7 +3,7 @@
  *
  * Fetches are fully mocked — these tests never touch the network.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   checkTailnetStatus,
   findTailnetUrl,
@@ -127,5 +127,47 @@ describe('TAILNET_LABEL', () => {
     expect(TAILNET_LABEL.connected).toBe('Tritium connected');
     expect(TAILNET_LABEL['tailscale-off']).toBe('Tailscale may be off');
     expect(TAILNET_LABEL.offline).toBe('Offline');
+  });
+});
+
+describe('checkTailnetStatus (native)', () => {
+  const TAIL = 'https://tritium-linux.fairy-chinstrap.ts.net';
+
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  async function loadNative(opts: { httpOk: boolean; netConnected: boolean }) {
+    vi.doMock('@capacitor/core', () => ({
+      Capacitor: { isNativePlatform: () => true },
+      CapacitorHttp: {
+        get: vi.fn(async () => {
+          if (!opts.httpOk) throw new Error('Failed to fetch');
+          return { status: 200, data: '' };
+        }),
+      },
+    }));
+    vi.doMock('@capacitor/network', () => ({
+      Network: { getStatus: vi.fn(async () => ({ connected: opts.netConnected })) },
+    }));
+    return (await import('./tailscale')) as typeof import('./tailscale');
+  }
+
+  it('reports connected when the native tailnet probe answers (no CORS involved)', async () => {
+    const m = await loadNative({ httpOk: true, netConnected: true });
+    const st = await m.checkTailnetStatus(settingsWith({ hub: TAIL }));
+    expect(st).toEqual({ state: 'connected', probeUrl: TAIL });
+  });
+
+  it('reports tailscale-off when the tailnet probe fails but the OS has internet', async () => {
+    const m = await loadNative({ httpOk: false, netConnected: true });
+    const st = await m.checkTailnetStatus(settingsWith({ hub: TAIL }));
+    expect(st).toEqual({ state: 'tailscale-off', probeUrl: TAIL });
+  });
+
+  it('reports offline when the tailnet probe fails and the OS has no internet', async () => {
+    const m = await loadNative({ httpOk: false, netConnected: false });
+    const st = await m.checkTailnetStatus(settingsWith({ hub: TAIL }));
+    expect(st).toEqual({ state: 'offline', probeUrl: TAIL });
   });
 });
