@@ -81,7 +81,7 @@ export const ListView: React.FC<ListViewProps> = ({
           <div className="item-row-meta">
             {dueInfo && (
               <span
-                className={`badge ${dueInfo.isPast && !isCompleted ? 'badge-due-overdue' : 'badge-due-today'}`}
+                className={`badge ${!isCompleted && dueInfo.isPast ? 'badge-due-overdue' : (!isCompleted && dueInfo.isToday ? 'badge-due-today' : '')}`}
               >
                 Due: {dueInfo.formatted}
               </span>

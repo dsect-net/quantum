@@ -110,7 +110,18 @@ export const DueView: React.FC<DueViewProps> = ({
                 <div className="item-row-content">
                   <div className="item-row-title">{item.title}</div>
                   <div className="item-row-meta">
-                    <span className="badge">Due: {formatDue(item.due_at)?.formatted}</span>
+                    {(() => {
+                      const dueInfo = formatDue(item.due_at);
+                      if (!dueInfo) return null;
+                      const isOverdue = item.status !== 'done' && dueInfo.isPast;
+                      const isToday = item.status !== 'done' && dueInfo.isToday;
+                      const dueBadgeClass = isOverdue ? 'badge-due-overdue' : (isToday ? 'badge-due-today' : '');
+                      return (
+                        <span className={`badge ${dueBadgeClass}`}>
+                          Due: {dueInfo.formatted}
+                        </span>
+                      );
+                    })()}
                     {item.priority && <span className="badge">P{item.priority}</span>}
                     <span className="badge">{item.type}</span>
                   </div>

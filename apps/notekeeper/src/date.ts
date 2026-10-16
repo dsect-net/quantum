@@ -110,3 +110,52 @@ export function classifyDueBucket(dueAt?: string | null): DueBucket | null {
   }
   return 'later';
 }
+
+/**
+ * Return YYYY-MM-DD for a given local date (defaults to now).
+ */
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Return today's local date string YYYY-MM-DD.
+ */
+export function getTodayString(): string {
+  return getLocalDateString(new Date());
+}
+
+/**
+ * Return tomorrow's local date string YYYY-MM-DD.
+ */
+export function getTomorrowString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return getLocalDateString(d);
+}
+
+/**
+ * Return next week's local date string YYYY-MM-DD (7 days from now).
+ */
+export function getNextWeekString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return getLocalDateString(d);
+}
+
+/**
+ * Format an incoming due_at string into a YYYY-MM-DD string suitable for <input type="date">.
+ */
+export function toDateInputValue(dueAt?: string | null): string {
+  if (!dueAt || typeof dueAt !== 'string') return '';
+  const trimmed = dueAt.trim();
+  if (isDateOnly(trimmed)) {
+    return trimmed.slice(0, 10);
+  }
+  const dateObj = new Date(trimmed);
+  if (isNaN(dateObj.getTime())) return '';
+  return getLocalDateString(dateObj);
+}

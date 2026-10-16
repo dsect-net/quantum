@@ -2,7 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { api, Item, List, ItemLinksResult } from '../api';
-import { formatDue, isDateOnly } from '../date';
+import {
+  formatDue,
+  isDateOnly,
+  getTodayString,
+  getTomorrowString,
+  getNextWeekString,
+  toDateInputValue,
+} from '../date';
 import { IconEdit, IconEye, IconTrash } from './Icons';
 
 interface ItemDetailProps {
@@ -46,6 +53,8 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialLoadDone = useRef(false);
+  const titleTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const fetchItemAndLinks = async () => {
     try {
@@ -64,7 +73,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
       setType(fetchedItem.type);
       setStatus(fetchedItem.status);
       setPriority(fetchedItem.priority ?? '');
-      setDueAt(fetchedItem.due_at ? fetchedItem.due_at.slice(0, 16) : '');
+      setDueAt(fetchedItem.due_at ? toDateInputValue(fetchedItem.due_at) : '');
       setTagsInput(fetchedItem.tags ? fetchedItem.tags.join(', ') : '');
 
       initialLoadDone.current = true;
@@ -74,6 +83,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (titleTextareaRef.current) {
+      titleTextareaRef.current.style.height = 'auto';
+      titleTextareaRef.current.style.height = `${titleTextareaRef.current.scrollHeight}px`;
+    }
+  }, [title]);
 
   useEffect(() => {
     fetchItemAndLinks();
@@ -226,6 +242,17 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
   const rawHtml = marked.parse(body || '*No content*');
   const sanitizedHtml = DOMPurify.sanitize(rawHtml as string);
 
+  const isNoDate = !dueAt;
+  const isTodayActive = dueAt === getTodayString();
+  const isTomorrowActive = dueAt === getTomorrowString();
+  const isNextWeekActive = dueAt === getNextWeekString();
+
+  const handleSetDue = (val: string | null) => {
+    const nextVal = val ? val.trim() : '';
+    setDueAt(nextVal);
+    triggerAutosave({ due_at: nextVal || null });
+  };
+
   return (
     <div data-testid="item-detail-view">
       {/* Top action bar */}
@@ -262,60 +289,48 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
 
       {/* Main card */}
       <div className="card">
-        {/* Title input (autosaves on change) */}
-        <div className="form-group">
-          <input
-            type="text"
+        {/* Title textarea (autosaves on change, auto-wraps, full-width) */}
+        <div className="form-group" style={{ marginBottom: '16px' }}>
+          <textarea
+            ref={titleTextareaRef}
             data-testid="item-title-input"
             className="form-input"
-            style={{ fontSize: '1.25rem', fontWeight: 700 }}
+            style={{
+              fontSize: '1.25rem',
+              fontWeight: 700,
+              lineHeight: 1.3,
+              minHeight: '44px',
+              width: '100%',
+              resize: 'none',
+              overflow: 'hidden',
+            }}
+            rows={1}
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = `${e.target.scrollHeight}px`;
               triggerAutosave({ title: e.target.value });
             }}
             placeholder="Title"
           />
         </div>
 
-        {/* Status / Type / List row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Status</label>
-            <select
-              className="form-select"
-              data-testid="item-status-select"
-              value={status}
-              onChange={(e) => {
-                const newStatus = e.target.value as any;
-                setStatus(newStatus);
-                triggerAutosave({ status: newStatus });
-              }}
-            >
-              <option value="open">Open</option>
-              <option value="done">Done</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Type</label>
-            <select
-              className="form-select"
-              data-testid="item-type-select"
-              value={type}
-              onChange={(e) => {
-                const newType = e.target.value as any;
-                setType(newType);
-                triggerAutosave({ type: newType });
-              }}
-            >
-              <option value="note">Note</option>
-              <option value="task">Task</option>
-              <option value="todo">Todo</option>
-            </select>
-          </div>
-
+        {/* Meta Card container per Brief reference mockup-01 */}
+        <div
+          className="detail-meta-card"
+          style={{
+            background: 'var(--bg-app)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '10px',
+            padding: '14px',
+            marginBottom: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          {/* Row 1: List (Full-Width) */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">List</label>
             <select
@@ -325,7 +340,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
               onChange={async (e) => {
                 const newListId = e.target.value;
                 setListId(newListId);
-                // Move item
                 try {
                   await api.moveItem(item.id, newListId);
                   setSaveStatus('Moved list');
@@ -342,26 +356,47 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
               ))}
             </select>
           </div>
-        </div>
 
-        {/* Due Date & Priority */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Due Date</label>
-            <input
-              type="datetime-local"
-              data-testid="item-due-input"
-              className="form-input"
-              value={dueAt}
-              onChange={(e) => {
-                setDueAt(e.target.value);
-                const val = e.target.value;
-                const normalized = val ? (isDateOnly(val) ? val : (val.includes('T') ? new Date(val).toISOString() : val)) : null;
-                triggerAutosave({ due_at: normalized });
-              }}
-            />
+          {/* Row 2: Status & Type (2 columns) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Status</label>
+              <select
+                className="form-select"
+                data-testid="item-status-select"
+                value={status}
+                onChange={(e) => {
+                  const newStatus = e.target.value as any;
+                  setStatus(newStatus);
+                  triggerAutosave({ status: newStatus });
+                }}
+              >
+                <option value="open">Open</option>
+                <option value="done">Done</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Type</label>
+              <select
+                className="form-select"
+                data-testid="item-type-select"
+                value={type}
+                onChange={(e) => {
+                  const newType = e.target.value as any;
+                  setType(newType);
+                  triggerAutosave({ type: newType });
+                }}
+              >
+                <option value="note">Note</option>
+                <option value="task">Task</option>
+                <option value="todo">Todo</option>
+              </select>
+            </div>
           </div>
 
+          {/* Row 3: Priority (Full-Width) */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Priority</label>
             <select
@@ -381,29 +416,75 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
               <option value="4">4 - Low</option>
             </select>
           </div>
+
+          {/* Row 4: Due Date (Full-Width with Quick Chips + Native Date Input) */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Due Date</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${isNoDate ? 'btn-black' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
+                onClick={() => handleSetDue(null)}
+              >
+                No date
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${isTodayActive ? 'btn-black' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
+                onClick={() => handleSetDue(getTodayString())}
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${isTomorrowActive ? 'btn-black' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
+                onClick={() => handleSetDue(getTomorrowString())}
+              >
+                Tomorrow
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${isNextWeekActive ? 'btn-black' : 'btn-secondary'}`}
+                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
+                onClick={() => handleSetDue(getNextWeekString())}
+              >
+                Next week
+              </button>
+            </div>
+            <input
+              type="date"
+              data-testid="item-due-input"
+              className="form-input"
+              value={dueAt}
+              onChange={(e) => handleSetDue(e.target.value)}
+            />
+          </div>
+
+          {/* Row 5: Tags (Full-Width) */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Tags</label>
+            <input
+              type="text"
+              data-testid="item-tags-input"
+              className="form-input"
+              value={tagsInput}
+              onChange={(e) => {
+                setTagsInput(e.target.value);
+                const tags = e.target.value
+                  .split(',')
+                  .map((t) => t.trim())
+                  .filter((t) => t.length > 0);
+                triggerAutosave({ tags });
+              }}
+              placeholder="comma separated tags"
+            />
+          </div>
         </div>
 
-        {/* Tags */}
-        <div className="form-group">
-          <label className="form-label">Tags</label>
-          <input
-            type="text"
-            data-testid="item-tags-input"
-            className="form-input"
-            value={tagsInput}
-            onChange={(e) => {
-              setTagsInput(e.target.value);
-              const tags = e.target.value
-                .split(',')
-                .map((t) => t.trim())
-                .filter((t) => t.length > 0);
-              triggerAutosave({ tags });
-            }}
-            placeholder="comma separated tags"
-          />
-        </div>
-
-        {/* Body (Markdown rendering + toggle edit) */}
+        {/* Body (Markdown rendering + in-place click to edit + toggle preview button) */}
         <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <label className="form-label" style={{ marginBottom: 0 }}>
@@ -413,7 +494,13 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
               type="button"
               data-testid="toggle-edit-body-btn"
               className="btn btn-secondary btn-sm"
-              onClick={() => setIsEditingBody(!isEditingBody)}
+              onClick={() => {
+                const next = !isEditingBody;
+                setIsEditingBody(next);
+                if (next) {
+                  setTimeout(() => bodyTextareaRef.current?.focus(), 50);
+                }
+              }}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               {isEditingBody ? (
@@ -430,6 +517,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
 
           {isEditingBody ? (
             <textarea
+              ref={bodyTextareaRef}
               className="form-textarea"
               data-testid="item-body-textarea"
               style={{ minHeight: '160px' }}
@@ -444,9 +532,29 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
             <div
               className="markdown-body"
               data-testid="item-body-rendered"
-              style={{ minHeight: '60px', padding: '8px 4px' }}
-              dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-            />
+              onClick={() => {
+                setIsEditingBody(true);
+                setTimeout(() => bodyTextareaRef.current?.focus(), 50);
+              }}
+              style={{
+                minHeight: '60px',
+                padding: '8px 10px',
+                borderRadius: 'var(--radius-btn)',
+                cursor: 'pointer',
+                background: 'var(--bg-app)',
+                border: '1px dashed var(--border-color)',
+                transition: 'border-color 0.15s ease, background-color 0.15s ease',
+              }}
+              title="Click to edit body"
+            >
+              {body.trim() ? (
+                <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+              ) : (
+                <p style={{ color: 'var(--text-dim)', fontStyle: 'italic', fontSize: '0.875rem' }}>
+                  Tap here to write notes (Markdown supported)...
+                </p>
+              )}
+            </div>
           )}
         </div>
 
