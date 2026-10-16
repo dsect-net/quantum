@@ -1,162 +1,189 @@
 # Quantum Notekeeper Service
 
-Local-first notes, tasks, and todo service for Quantum OS. Exposes both an MCP toolset for AI agents (chiefly Cooper) and an HTTP REST API for the Quantum Notekeeper web application.
+> **Monorepo Structure Note:**
+> - Backend Service (this package): [`services/notekeeper/`](.) — Fastify, SQLite, FTS5, Ollama semantic search, MCP Streamable HTTP transport, REST API.
+> - Frontend Application: [`apps/notekeeper/`](../../apps/notekeeper/) — Mobile-first React, Vite, TypeScript, plain CSS corporate minimalist light theme.
 
-## Overview
+Local-first notes, tasks, and todo service for Quantum OS. Exposes both a Model Context Protocol (MCP) toolset for AI agents (chiefly Cooper) and an HTTP REST API for the Quantum Notekeeper web application.
 
-- **Storage:** SQLite with WAL mode, foreign keys enabled, and automatic migrations via `schema_version`.
-- **Search:** SQLite FTS5 with trigger-based real-time synchronization over item titles and bodies.
-- **Agent Surface:** Model Context Protocol (MCP) Streamable HTTP transport mounted at `/mcp`.
-- **Application Surface:** REST API mounted at `/api/v1`.
-- **Service Layer:** Unified business logic in `src/service.ts` consumed by both MCP and REST adapters (D3).
+---
 
-## Getting Started
+## Quickstart
 
-### 1. Install Dependencies
+### 1. Prerequisites
+- Node.js 20+
+- npm 9+
+- (Optional, for semantic search) Local [Ollama](https://ollama.com/) instance running with `nomic-embed-text` installed:
+  ```bash
+  ollama pull nomic-embed-text
+  ```
 
+### 2. Install & Configure
+From a clean clone:
 ```bash
 cd services/notekeeper
 npm install
-```
 
-### 2. Configure Environment
-
-Copy `.env.example` to `.env` (or pass variables via your environment):
-
-```bash
+# Copy environment configuration
 cp .env.example .env
 ```
 
-Available environment variables:
-- `NOTEKEEPER_DB`: Path to the SQLite database file (default: `./data/notekeeper.db`).
-- `NOTEKEEPER_TOKEN`: Optional Bearer authentication token for `/mcp` and `/api/*`. If unset, requests are permitted without authentication (intended for local development).
-- `PORT`: Port to listen on (default: `8791`).
-- `OLLAMA_HOST`: Local Ollama instance URL for semantic embeddings (default: `http://127.0.0.1:11434`, used in Step 4).
-- `OLLAMA_EMBED_MODEL`: Embedding model (default: `nomic-embed-text`, used in Step 4).
-
 ### 3. Build & Run
-
 ```bash
-# Build TypeScript
+# Build TypeScript to dist/
 npm run build
 
 # Start production server
 npm start
 
-# Development mode with hot reload
+# Or development mode with auto-reload (tsx)
 npm run dev
 ```
+The service will start on `http://0.0.0.0:8791` (or your configured `PORT`).
 
-### 4. Running Tests & Smoke Check
-
+Verify health:
 ```bash
-# Run unit, service, and contract tests
+curl http://localhost:8791/health
+# {"status":"ok","schema_version":2,"lists":7}
+```
+
+### 4. Running Tests
+```bash
+# Run unit, service, and contract tests (vitest)
 npm test
 
-# Run end-to-end smoke test against a temporary database and live MCP client
+# Run standalone end-to-end smoke test against a fresh temp DB
 npm run smoke
 ```
 
 ---
 
-## REST API Surface (`/api/v1`) (Step 3)
+## Environment Variables
 
-The REST API mirrors the MCP toolset over standard HTTP JSON endpoints.
-
-### Author Default Convention
-REST mutations accept an optional `author` string in the request body. Because the web app is Scotty's primary door to the system, when `author` is omitted from any REST mutation (`POST /items`, `PATCH /items/:id`, `DELETE`, `restore`, `complete`, `reopen`, `move`), it **automatically defaults to `'scotty'`**.
-
-### Endpoints
-- `GET /api/v1/lists` — Returns all active lists with open item counts (`open_count`) and breakdown (`counts`).
-- `POST /api/v1/lists` — Create a new list (`{ name, category, parent_list_id?, private?, author? }`).
-- `GET /api/v1/lists/:id` — Get list by ID or name with item counts by status (`{ list, counts }`).
-- `GET /api/v1/lists/:id/items` — Paginated list items (`?status=&type=&include_subitems=&limit=&offset=`).
-- `POST /api/v1/items` — Create a new item (`{ title, body?, list?, type?, tags?, priority?, due_at?, category?, linked_source?, parent_item_id?, author? }`).
-- `GET /api/v1/items/:id` — Get full item (`?include_revisions=true` includes revision history). Returns `404` if missing or soft-deleted.
-- `PATCH /api/v1/items/:id` — Update item fields. If body carries `autosave: true`, activates the 5-minute edit coalescing window for client autosaving; otherwise snapshots unconditionally.
-- `DELETE /api/v1/items/:id` — Soft-delete item (returns `200` with `{ id, deleted_at }`).
-- `POST /api/v1/items/:id/restore` — Restores tombstoned item.
-- `POST /api/v1/items/:id/complete` — Marks task/todo as done (`status: 'done'`, sets `completed_at`). Rejects notes with `400`.
-- `POST /api/v1/items/:id/reopen` — Reopens task/todo (`status: 'open'`, clears `completed_at`). Rejects notes with `400`.
-- `POST /api/v1/items/:id/move` — Moves item to another list (`{ to_list, author? }`).
-- `GET /api/v1/search` — Keyword search with filter query parameters (`?q=&list=&category=&tag=&type=&status=&due_before=&due_after=&limit=&offset=`). Returns `{ results: [{ item, match: 'keyword' }], total, degraded: true }`.
-- `GET /api/v1/items/:id/links` — Returns all outgoing and incoming backlinks (`{ outgoing: [...], incoming: [...] }`) with resolved title, type, and deleted status for the other end.
-- `POST /api/v1/items/:id/links` — Create a link (`{ to_item_id?, external_url?, relation, author? }`). Author defaults to `'scotty'`. Duplicate calls return the existing link row.
-
-### HTTP Status Code Semantics
-- `200 OK` / `201 Created` on success.
-- `400 Bad Request` for invalid inputs, missing required fields, invalid link relations or mutually exclusive targets, or attempting task operations on notes.
-- `401 Unauthorized` when `NOTEKEEPER_TOKEN` is set and `Authorization: Bearer <token>` is missing/invalid.
-- `404 Not Found` when a requested item or list is missing or tombstoned.
-- Stack traces are never leaked in API responses.
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `NOTEKEEPER_DB` | string | `./data/notekeeper.db` | File path to the SQLite database. Parent directories are created automatically. Set to `:memory:` in tests. |
+| `NOTEKEEPER_TOKEN` | string | _(none)_ | Optional shared Bearer token. When set, all requests to `/mcp` and `/api/*` require `Authorization: Bearer <token>`. When unset, auth is disabled for local dev. |
+| `PORT` | number | `8791` | Port to listen on. |
+| `HOST` | string | `0.0.0.0` | Network interface to bind to. |
+| `OLLAMA_HOST` | string | `http://127.0.0.1:11434` | Base URL for the local Ollama embeddings instance. |
+| `EMBED_MODEL` | string | `nomic-embed-text` | Ollama embedding model name (`OLLAMA_EMBED_MODEL` accepted as an alias). |
+| `NOTEKEEPER_EMBED_INTERVAL_MS` | number | `60000` | Frequency in ms of background async embedding batch passes. Set to `0` to disable timer. |
 
 ---
 
-## MCP Toolset (`/mcp`) (Step 2, 4, 5)
+## API Surface: Reality vs. Brief
 
-All items, lists, search, and link operations are exposed over the MCP Streamable HTTP transport at `/mcp`:
+The service exposes two interfaces over the same underlying business logic layer ([`src/service.ts`](src/service.ts)):
 
-### Items
-- `note_add` — `{ title, author, body?, list?, type?, tags?, priority?, due_at?, category?, linked_source?, parent_item_id? }` → `{ id, item }`
-- `note_get` — `{ id, include_revisions? }` → full item (with optional revision history)
-- `note_update` — `{ id, author, title?, body?, list?, type?, tags?, priority?, due_at?, status?, linked_source?, parent_item_id? }` → updated item
-- `note_delete` — `{ id, author }` → soft delete tombstone `{ id, deleted_at }`
-- `note_restore` — `{ id, author }` → restores tombstoned item
-- `note_complete` — `{ id, author }` → marks task/todo as done (`status: 'done'`, sets `completed_at`)
-- `note_reopen` — `{ id, author }` → reopens completed task/todo (`status: 'open'`, clears `completed_at`)
-- `note_search` — `{ query, list?, category?, tag?, type?, status?, due_before?, due_after?, limit?, offset? }` → hybrid search results
+### 1. REST API (`/api/v1`)
+All endpoints speak JSON. When `NOTEKEEPER_TOKEN` is set, requests require `Authorization: Bearer <token>`.
 
-### Lists
-- `list_create` — `{ name, category, parent_list_id?, private?, author? }` → created list
-- `list_get` — `{ id?, name? }` → `{ list, counts: { open, done, archived, total } }`
-- `list_items` — `{ list, status?, type?, include_subitems?, limit?, offset? }` → `{ items, total, limit, offset }`
-- `list_move_item` — `{ item_id, to_list, author }` → updated item in destination list
+- `GET /health` — Service health, current `schema_version`, and list count. (Public, no auth).
+- `GET /api/v1/lists` — All active lists with `open_count` and full counts breakdown `{ open, done, archived, total }`.
+- `POST /api/v1/lists` — Create a list (`{ name, category, parent_list_id?, private?, author? }`).
+- `GET /api/v1/lists/:id` — Get list by ID or name with count breakdown.
+- `GET /api/v1/lists/:id/items` — Query list items (`?status=&type=&include_subitems=&limit=&offset=`).
+- `POST /api/v1/items` — Create an item (`{ title, body?, list?, type?, tags?, priority?, due_at?, category?, linked_source?, parent_item_id?, author? }`).
+- `GET /api/v1/items/:id` — Get item by ID (`?include_revisions=true` embeds full revision history). Returns 404 if soft-deleted or missing.
+- `PATCH /api/v1/items/:id` — Update item fields. Accepts `autosave: true` to enable the 5-minute revision coalesce window.
+- `DELETE /api/v1/items/:id` — Soft-delete item (sets `deleted_at`, returns `{ id, deleted_at }`).
+- `POST /api/v1/items/:id/restore` — Restores a soft-deleted item.
+- `POST /api/v1/items/:id/complete` — Mark task/todo done (sets `status: 'done'`, records `completed_at`).
+- `POST /api/v1/items/:id/reopen` — Reopens task/todo (sets `status: 'open'`, clears `completed_at`).
+- `POST /api/v1/items/:id/move` — Move item to another list (`{ to_list, author? }`).
+- `GET /api/v1/deleted` — *[Extension to Brief §9]* Returns soft-deleted items with pagination to power the web app's Deleted Items recovery view.
+- `GET /api/v1/search` — Hybrid search (`?q=&list=&category=&tag=&type=&status=&due_before=&due_after=&limit=&offset=`). Returns `{ results: [{ item, match: 'both'|'semantic'|'keyword' }], total, degraded?: boolean, degraded_reason?: string }`.
+- `GET /api/v1/items/:id/links` — Returns resolved incoming and outgoing backlinks `{ outgoing: [...], incoming: [...] }`.
+- `POST /api/v1/items/:id/links` — Create link (`{ to_item_id?, external_url?, relation: 'spawned'|'blocks'|'related'|'reference', author? }`). Idempotent duplicate calls return the existing link row.
 
-### Links (Step 5)
-- `note_link` — `{ from_item_id, to_item_id?, external_url?, relation, author }` → `item_links` row
-- `note_links` — `{ item_id }` → `{ outgoing: [...], incoming: [...] }` (backlinks with resolved other end)
+### 2. MCP Toolset (`/mcp`)
+Mounted using the MCP Streamable HTTP transport at `/mcp` and `/mcp/*`:
+- `note_add` — Add a new note, task, or todo.
+- `note_get` — Fetch item by ID, optionally including revision history (`include_revisions: boolean`).
+- `note_update` — Update item fields, priority, tags, status, or parent.
+- `note_delete` — Soft-delete item with tombstone record.
+- `note_restore` — Restore soft-deleted item.
+- `note_complete` — Complete task/todo.
+- `note_reopen` — Reopen completed task/todo.
+- `note_search` — Hybrid FTS5 + vector search with metadata filters.
+- `list_create` — Create a new list.
+- `list_get` — Get list by ID or name with status counts.
+- `list_items` — Paginated list items with filtering and subitem support.
+- `list_move_item` — Move item to another list.
+- `note_link` — Link two items or link an item to an external URL.
+- `note_links` — Retrieve incoming and outgoing links with resolved target metadata.
 
 ---
 
-## Hybrid Semantic Search & Embedding Lifecycle (§11 Step 4)
+## Database, WAL Mode & Backups
 
-Search uses a hybrid combination of SQLite FTS5 (BM25 keyword) and vector embeddings (cosine similarity) powered by local Ollama (`nomic-embed-text`, 768 dimensions).
+Notekeeper uses SQLite (`better-sqlite3`) configured with:
+- `PRAGMA journal_mode = WAL;` (Write-Ahead Logging)
+- `PRAGMA foreign_keys = ON;`
+- `PRAGMA synchronous = NORMAL;`
 
-### Scoring Rule
-1. **Keyword Scoring**: SQLite FTS5 returns negative BM25 ranks (`bm25(items_fts)`). We invert and normalize to `[0, 1)`:
+### Backup Procedure
+Because WAL mode separates writes into a write-ahead log, simply copying `notekeeper.db` while transactions are active may produce an incomplete backup.
+
+**Safe Online Backup (No Downtime):**
+1. Trigger a checkpoint to flush the WAL log into the main DB file:
+   ```bash
+   sqlite3 ./data/notekeeper.db "PRAGMA wal_checkpoint(TRUNCATE);"
+   ```
+2. Copy `./data/notekeeper.db` to your backup target.
+
+**Alternative File Copy Backup:**
+Copy all three database files together:
+- `notekeeper.db` (main database file)
+- `notekeeper.db-wal` (write-ahead log, if present)
+- `notekeeper.db-shm` (shared-memory index, if present)
+
+**SQLite CLI Backup API:**
+```bash
+sqlite3 ./data/notekeeper.db ".backup ./data/notekeeper-backup-$(date +%Y%m%d%H%M%S).db"
+```
+
+---
+
+## Semantic Search & Embedding Model Lifecycle
+
+### Async Ingestion (§13b.1)
+Writes (`note_add`, `note_update`) never block on Ollama or network latency. New or edited items have `items.embedding_status = 'pending'`. A background worker batches pending items, generates vectors via Ollama, stores them in `embeddings`, and sets `embedding_status = 'done'`.
+
+### Hybrid Ranking Rule
+1. **Keyword Scoring:** Inverted BM25 from SQLite FTS5 normalized to $[0, 1)$:
    $$\text{keywordScore} = \frac{\max(0, -\text{bm25})}{1 + \max(0, -\text{bm25})}$$
-2. **Semantic Scoring**: Cosine similarity between query embedding and item embedding:
+2. **Semantic Scoring:** Vector cosine similarity thresholded at `0.50`:
    $$\text{semanticScore} = \max(0, \cos(\mathbf{q}, \mathbf{d}))$$
-   Items with cosine similarity below `0.50` are filtered out from semantic candidacy.
-3. **Combined Ranking**:
-   - `match: 'both'`: $\text{combinedScore} = \text{semanticScore} \times 1.2 + \text{keywordScore} \times 0.8 + 0.3$
-   - `match: 'semantic'`: $\text{combinedScore} = \text{semanticScore} \times 1.2$
-   - `match: 'keyword'`: $\text{combinedScore} = \text{keywordScore} \times 0.8$
-   This guarantees that items matching both channels rank highest, and semantic matches rank slightly above pure keyword matches when confidence is high.
+3. **Combined Fusion:**
+   - Both: $\text{score} = \text{semanticScore} \times 1.2 + \text{keywordScore} \times 0.8 + 0.3$
+   - Semantic only: $\text{score} = \text{semanticScore} \times 1.2$
+   - Keyword only: $\text{score} = \text{keywordScore} \times 0.8$
 
-### Async Embedding Lifecycle (§13b.1)
-- Write operations (`note_add`, `note_update`) never block on Ollama; they set `items.embedding_status = 'pending'`.
-- A background pass (`service.runEmbeddingPass()`) queries pending items, batches them to Ollama, writes `embeddings`, and updates `embedding_status = 'done'`.
-- Runs on server boot (backfilling any un-embedded items) and periodically via an unref'd timer (configured by `NOTEKEEPER_EMBED_INTERVAL_MS`).
-- If Ollama is unreachable, `embedding_status` transitions to `'failed'` and logs a warning without throwing. Search requests gracefully degrade to keyword-only results with `degraded: true` and an explanatory note.
-
-## Item Links & Backlinks (§11 Step 5)
-
-Items can be linked to other items (internal links) or URLs (external links) using four explicit relations:
-- `'spawned'` — child task or idea spawned from this item
-- `'blocks'` — dependency blocking this item or target
-- `'related'` — general contextual association
-- `'reference'` — link to documentation, specs, issues, or external resources
-
-### Validation & Behavior
-- **Mutually Exclusive Targets**: Exactly one of `to_item_id` or `external_url` must be provided.
-- **Idempotency**: Duplicate calls for the same `(from_item_id, target, relation)` return the existing `item_links` row instead of creating duplicate records.
-- **Backlink Resolution**: `note_links` and `GET /api/v1/items/:id/links` return `{ outgoing, incoming }`. The other end is resolved with `id`, `title`, and `type`, avoiding extra fetches.
-- **Truthful History & Soft Deletes**: Creating a link involving a tombstoned (soft-deleted) item is rejected with an error. If an item was linked while live and its target/source is soft-deleted later, the link remains present in `outgoing` and `incoming`, marked with `deleted: true` on that end.
+### Changing the Embedding Model
+- The `embeddings` table uses a compound primary key: `(item_id, model_id)`.
+- If `EMBED_MODEL` is changed (e.g. from `nomic-embed-text` to another model):
+  1. Historical vectors for the old model remain safely in SQLite under their `model_id`.
+  2. On startup and during background passes, the service searches for items missing vectors for the *active* `model_id` (`LEFT JOIN embeddings ... WHERE embeddings.item_id IS NULL`).
+  3. The backfill process automatically embeds all active items under the new model without manual intervention.
 
 ---
 
-## Audit & Revisions (§13b.2)
-Every mutation writes an audit revision snapshot with a `kind` column (`'create' | 'edit' | 'complete' | 'reopen' | 'delete' | 'restore' | 'move'`). The service layer supports an edit coalescing policy for client autosave within 5-minute windows by the same author (activated via `autosave: true` in REST). MCP agent mutations always snapshot immutably (`coalesce: false`).
+## Authentication & Security Boundaries
 
+- **Single Shared Bearer Token:** Controlled by `NOTEKEEPER_TOKEN`. When configured, all non-health HTTP endpoints (`/mcp` and `/api/*`) require `Authorization: Bearer <token>`.
+- **Limits:** The authentication layer verifies that the caller possesses the token. It does not perform public-key cryptography or per-user permission segregation.
+- **Author Identity:** All audit log and mutation attribution is tracked via the explicit `author` parameter (`cooper`, `scotty`, etc.).
 
+---
+
+## Design Decisions Collected Across Chunks
+
+1. **REST Author Defaulting (Chunk 3):** Web app requests rarely prompt for author identity. For REST mutations, when `author` is omitted, it defaults to `'scotty'`. MCP tool mutations continue to require explicit `author`.
+2. **Autosave Coalescing (Chunk 3 & Brief §13b.2):** The web app autosaves draft typing with `autosave: true`. If the previous revision on that item was an edit by the same author within the last 5 minutes, Notekeeper coalesces the snapshot instead of creating thousands of micro-revisions. Explicit "Save" button clicks pass `autosave: false` to force a clean snapshot.
+3. **Date-Only Local Calendar Semantics (Chunk 6b):** Date-only strings (`YYYY-MM-DD`) are preserved in SQLite as date-only and interpreted as local calendar dates by client and server, preventing UTC midnight conversion from shifting dates back into the prior local day.
+4. **Link Idempotency (Chunk 5):** Calling `note_link` or `POST /items/:id/links` with identical endpoints and relation returns the existing row rather than failing or duplicating.
+5. **Truthful Deleted Links (Chunk 5):** Linking to or from a currently deleted item is rejected. However, if an item was linked while live and one end is later soft-deleted, queries for backlinks retain the link marked with `deleted: true`.
+6. **Graceful Degradation (Chunk 4):** If Ollama is offline, search queries fall back to keyword-only search with `{ degraded: true, degraded_reason: '...' }` rather than failing the request.
+7. **Deleted Items Endpoint (Chunk 6):** Added `GET /api/v1/deleted` to retrieve tombstoned items for Screen 1's Deleted Items drawer.

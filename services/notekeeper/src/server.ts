@@ -56,6 +56,30 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerI
     }
   });
 
+  // Central error handler: ensures malformed JSON body produces 400 JSON response
+  app.setErrorHandler((error: any, _req, reply) => {
+    if (error.statusCode === 400 || error instanceof SyntaxError || (error as any).status === 400) {
+      reply.status(400).send({
+        error: 'Bad Request',
+        message: error.message || 'Malformed or invalid JSON body',
+      });
+      return;
+    }
+    const statusCode = error.statusCode || 500;
+    reply.status(statusCode).send({
+      error: error.name || 'Internal Server Error',
+      message: error.message || 'An unexpected error occurred',
+    });
+  });
+
+  // Central 404 handler: ensures unknown routes produce 404 JSON response
+  app.setNotFoundHandler((req, reply) => {
+    reply.status(404).send({
+      error: 'Not Found',
+      message: `Route ${req.method} ${req.url} not found`,
+    });
+  });
+
   // CORS support for web app dev origin
   app.addHook('onRequest', async (req, reply) => {
     reply.header('Access-Control-Allow-Origin', '*');
@@ -168,6 +192,21 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     .then(async (server) => {
       const address = await server.start();
       console.log(`Quantum Notekeeper service running at ${address}`);
+
+      const shutdown = async (signal: string) => {
+        console.log(`Received ${signal}, shutting down gracefully...`);
+        try {
+          await server.close();
+          console.log('Notekeeper service closed cleanly');
+          process.exit(0);
+        } catch (err) {
+          console.error('Error during shutdown:', err);
+          process.exit(1);
+        }
+      };
+
+      process.on('SIGINT', () => shutdown('SIGINT'));
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
     })
     .catch((err) => {
       console.error('Fatal error starting Notekeeper service:', err);
