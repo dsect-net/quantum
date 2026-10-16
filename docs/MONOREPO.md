@@ -41,13 +41,13 @@
 ## Phases (story points, Fibonacci)
 
 1. **Designate & document** — this issue + `docs/MONOREPO.md` in `dsect-net/quantum`. *(2 pts — done Oct 15)*
-2. **Restructure quantum repo** — move the existing app to `apps/quantum`, create `packages/` skeleton, workspace tooling, build + tests verified green against the pushed ref, APK path unaffected. *(8 pts)*
+2. **Restructure quantum repo** — move the existing app to `apps/quantum`, create `packages/` skeleton, workspace tooling, build + tests verified green against the pushed ref, APK path unaffected. *(13 pts)*
 3. **First fold: research-hub** — smallest leaf, no dependents; proves the fold procedure end to end. *(3 pts)*
 4. **design-system → packages/ui** — highest value; every app imports the kit instead of vendoring copies. Import paths updated in quantum app; build verified. *(5 pts)*
 5. **Fold agent-chat and hive-memory as modules** — one at a time, each verified live before the next. *(8 pts)*
 6. **Evaluate, don't assume** — hub-api and nebula stay separate unless a concrete sharing need appears; quantum-cli folds only if the TUI starts sharing packages. *(review, 0 pts)*
 
-**Program total: ~26 points.**
+**Program total: ~31 points.**
 
 ## Guardrails
 - **Stack-affinity guardrail.** The monorepo default is not a gravity well: a component on a foreign runtime — a Python/Demucs audio worker, a native toolchain, GPU-bound processing — is not forced into the TypeScript/pnpm monorepo merely to obey "spin out, don't start out." Heavy or foreign-runtime services stay as isolated containers or in their own repos and talk to the platform over the same contracts as everything else. The monorepo default applies to components that genuinely share Quantum's stack, login, and design language; stack affinity beats repo tidiness. *(From the Cooper × Antigravity joint plan §3; decided by Cooper, Oct 15, 2026, under Scotty's handoff rule.)*
