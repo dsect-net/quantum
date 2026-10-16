@@ -488,4 +488,215 @@ describe('NoteKeeperService CRUD & Revisions', () => {
       expect(topOnly.items[0].title).toBe('Parent');
     });
   });
+
+  describe('Item Links & Backlinks (§11 Step 5)', () => {
+    it('creates internal link and resolves outgoing and incoming backlinks', () => {
+      const itemA = service.addNote({
+        title: 'Task Alpha',
+        type: 'task',
+        author: 'scotty',
+      });
+      const itemB = service.addNote({
+        title: 'Note Beta',
+        type: 'note',
+        author: 'scotty',
+      });
+
+      const link = service.addLink({
+        from_item_id: itemA.id,
+        to_item_id: itemB.id,
+        relation: 'spawned',
+        author: 'scotty',
+      });
+
+      expect(link.id).toBeDefined();
+      expect(link.from_item_id).toBe(itemA.id);
+      expect(link.to_item_id).toBe(itemB.id);
+      expect(link.relation).toBe('spawned');
+
+      // Check outgoing on itemA
+      const linksA = service.getItemLinks(itemA.id);
+      expect(linksA.outgoing).toHaveLength(1);
+      expect(linksA.incoming).toHaveLength(0);
+      expect(linksA.outgoing[0].id).toBe(link.id);
+      expect(linksA.outgoing[0].target?.id).toBe(itemB.id);
+      expect(linksA.outgoing[0].target?.title).toBe('Note Beta');
+      expect(linksA.outgoing[0].target?.type).toBe('note');
+      expect(linksA.outgoing[0].target?.deleted).toBe(false);
+
+      // Check incoming on itemB (backlink)
+      const linksB = service.getItemLinks(itemB.id);
+      expect(linksB.incoming).toHaveLength(1);
+      expect(linksB.outgoing).toHaveLength(0);
+      expect(linksB.incoming[0].id).toBe(link.id);
+      expect(linksB.incoming[0].source.id).toBe(itemA.id);
+      expect(linksB.incoming[0].source.title).toBe('Task Alpha');
+      expect(linksB.incoming[0].source.type).toBe('task');
+      expect(linksB.incoming[0].source.deleted).toBe(false);
+    });
+
+    it('creates external link with URL and resolves relation and URL', () => {
+      const item = service.addNote({
+        title: 'Quantum Issue Research',
+        author: 'scotty',
+      });
+
+      const link = service.addLink({
+        from_item_id: item.id,
+        external_url: 'https://github.com/dsect-net/quantum/issues/42',
+        relation: 'reference',
+        author: 'cooper',
+      });
+
+      expect(link.id).toBeDefined();
+      expect(link.from_item_id).toBe(item.id);
+      expect(link.to_item_id).toBeNull();
+      expect(link.external_url).toBe('https://github.com/dsect-net/quantum/issues/42');
+      expect(link.relation).toBe('reference');
+
+      const links = service.getItemLinks(item.id);
+      expect(links.outgoing).toHaveLength(1);
+      expect(links.outgoing[0].external_url).toBe('https://github.com/dsect-net/quantum/issues/42');
+      expect(links.outgoing[0].relation).toBe('reference');
+      expect(links.outgoing[0].target).toBeNull();
+    });
+
+    it('duplicate identical link returns existing row without creating duplicate', () => {
+      const itemA = service.addNote({ title: 'A', author: 'scotty' });
+      const itemB = service.addNote({ title: 'B', author: 'scotty' });
+
+      const link1 = service.addLink({
+        from_item_id: itemA.id,
+        to_item_id: itemB.id,
+        relation: 'related',
+        author: 'scotty',
+      });
+
+      const link2 = service.addLink({
+        from_item_id: itemA.id,
+        to_item_id: itemB.id,
+        relation: 'related',
+        author: 'cooper',
+      });
+
+      expect(link2.id).toBe(link1.id);
+      expect(service.getItemLinks(itemA.id).outgoing).toHaveLength(1);
+
+      // External duplicate test
+      const ext1 = service.addLink({
+        from_item_id: itemA.id,
+        external_url: 'https://dsect.net',
+        relation: 'reference',
+      });
+      const ext2 = service.addLink({
+        from_item_id: itemA.id,
+        external_url: 'https://dsect.net',
+        relation: 'reference',
+      });
+      expect(ext2.id).toBe(ext1.id);
+      expect(service.getItemLinks(itemA.id).outgoing).toHaveLength(2);
+    });
+
+    it('validates targets and relations, rejecting invalid configurations', () => {
+      const itemA = service.addNote({ title: 'A', author: 'scotty' });
+      const itemB = service.addNote({ title: 'B', author: 'scotty' });
+
+      // Both targets provided
+      expect(() =>
+        service.addLink({
+          from_item_id: itemA.id,
+          to_item_id: itemB.id,
+          external_url: 'https://example.com',
+          relation: 'related',
+        })
+      ).toThrow(/Provide either to_item_id or external_url, not both/i);
+
+      // Neither target provided
+      expect(() =>
+        service.addLink({
+          from_item_id: itemA.id,
+          relation: 'related',
+        })
+      ).toThrow(/Either to_item_id or external_url must be provided/i);
+
+      // Invalid relation
+      expect(() =>
+        service.addLink({
+          from_item_id: itemA.id,
+          to_item_id: itemB.id,
+          relation: 'invalid-rel' as any,
+        })
+      ).toThrow(/Invalid link relation/i);
+
+      // Self-link
+      expect(() =>
+        service.addLink({
+          from_item_id: itemA.id,
+          to_item_id: itemA.id,
+          relation: 'related',
+        })
+      ).toThrow(/Cannot link an item to itself/i);
+    });
+
+    it('rejects creating links involving soft-deleted items', () => {
+      const itemA = service.addNote({ title: 'Live A', author: 'scotty' });
+      const itemB = service.addNote({ title: 'Live B', author: 'scotty' });
+      const itemDeleted = service.addNote({ title: 'Deleted C', author: 'scotty' });
+      service.deleteNote(itemDeleted.id, 'scotty');
+
+      // from_item is deleted
+      expect(() =>
+        service.addLink({
+          from_item_id: itemDeleted.id,
+          to_item_id: itemA.id,
+          relation: 'related',
+        })
+      ).toThrow(/Source item not found or has been deleted/i);
+
+      // to_item is deleted
+      expect(() =>
+        service.addLink({
+          from_item_id: itemA.id,
+          to_item_id: itemDeleted.id,
+          relation: 'related',
+        })
+      ).toThrow(/Target item not found or has been deleted/i);
+
+      // getItemLinks on deleted item
+      expect(() => service.getItemLinks(itemDeleted.id)).toThrow(/Item not found or has been deleted/i);
+    });
+
+    it('marks deleted: true on the resolved end when the other end is soft-deleted later', () => {
+      const itemA = service.addNote({ title: 'Item A', author: 'scotty' });
+      const itemB = service.addNote({ title: 'Item B', author: 'scotty' });
+
+      service.addLink({
+        from_item_id: itemA.id,
+        to_item_id: itemB.id,
+        relation: 'blocks',
+        author: 'scotty',
+      });
+
+      // Soft delete B
+      service.deleteNote(itemB.id, 'scotty');
+
+      // Calling getItemLinks on live item A still returns the link, with target marked deleted: true
+      const linksA = service.getItemLinks(itemA.id);
+      expect(linksA.outgoing).toHaveLength(1);
+      expect(linksA.outgoing[0].target?.id).toBe(itemB.id);
+      expect(linksA.outgoing[0].target?.deleted).toBe(true);
+      expect(linksA.outgoing[0].deleted).toBe(true);
+
+      // Restore B, soft-delete A
+      service.restoreNote(itemB.id, 'scotty');
+      service.deleteNote(itemA.id, 'scotty');
+
+      // Calling getItemLinks on live item B still returns the link, with source marked deleted: true
+      const linksB = service.getItemLinks(itemB.id);
+      expect(linksB.incoming).toHaveLength(1);
+      expect(linksB.incoming[0].source.id).toBe(itemA.id);
+      expect(linksB.incoming[0].source.deleted).toBe(true);
+      expect(linksB.incoming[0].deleted).toBe(true);
+    });
+  });
 });

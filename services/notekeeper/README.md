@@ -80,21 +80,21 @@ REST mutations accept an optional `author` string in the request body. Because t
 - `POST /api/v1/items/:id/reopen` — Reopens task/todo (`status: 'open'`, clears `completed_at`). Rejects notes with `400`.
 - `POST /api/v1/items/:id/move` — Moves item to another list (`{ to_list, author? }`).
 - `GET /api/v1/search` — Keyword search with filter query parameters (`?q=&list=&category=&tag=&type=&status=&due_before=&due_after=&limit=&offset=`). Returns `{ results: [{ item, match: 'keyword' }], total, degraded: true }`.
-- `GET /api/v1/items/:id/links` & `POST /api/v1/items/:id/links` — Placeholder routes returning `501 { error: 'links arrive in step 5' }`.
+- `GET /api/v1/items/:id/links` — Returns all outgoing and incoming backlinks (`{ outgoing: [...], incoming: [...] }`) with resolved title, type, and deleted status for the other end.
+- `POST /api/v1/items/:id/links` — Create a link (`{ to_item_id?, external_url?, relation, author? }`). Author defaults to `'scotty'`. Duplicate calls return the existing link row.
 
 ### HTTP Status Code Semantics
 - `200 OK` / `201 Created` on success.
-- `400 Bad Request` for invalid inputs, missing required fields, or attempting task operations on notes.
+- `400 Bad Request` for invalid inputs, missing required fields, invalid link relations or mutually exclusive targets, or attempting task operations on notes.
 - `401 Unauthorized` when `NOTEKEEPER_TOKEN` is set and `Authorization: Bearer <token>` is missing/invalid.
 - `404 Not Found` when a requested item or list is missing or tombstoned.
-- `501 Not Implemented` for link operations (Step 5).
 - Stack traces are never leaked in API responses.
 
 ---
 
-## MCP Toolset (`/mcp`) (Step 2)
+## MCP Toolset (`/mcp`) (Step 2, 4, 5)
 
-All items, lists, and search operations are also exposed over the MCP Streamable HTTP transport at `/mcp`:
+All items, lists, search, and link operations are exposed over the MCP Streamable HTTP transport at `/mcp`:
 
 ### Items
 - `note_add` — `{ title, author, body?, list?, type?, tags?, priority?, due_at?, category?, linked_source?, parent_item_id? }` → `{ id, item }`
@@ -104,13 +104,17 @@ All items, lists, and search operations are also exposed over the MCP Streamable
 - `note_restore` — `{ id, author }` → restores tombstoned item
 - `note_complete` — `{ id, author }` → marks task/todo as done (`status: 'done'`, sets `completed_at`)
 - `note_reopen` — `{ id, author }` → reopens completed task/todo (`status: 'open'`, clears `completed_at`)
-- `note_search` — `{ query, list?, category?, tag?, type?, status?, due_before?, due_after?, limit?, offset? }` → search results
+- `note_search` — `{ query, list?, category?, tag?, type?, status?, due_before?, due_after?, limit?, offset? }` → hybrid search results
 
 ### Lists
 - `list_create` — `{ name, category, parent_list_id?, private?, author? }` → created list
 - `list_get` — `{ id?, name? }` → `{ list, counts: { open, done, archived, total } }`
 - `list_items` — `{ list, status?, type?, include_subitems?, limit?, offset? }` → `{ items, total, limit, offset }`
 - `list_move_item` — `{ item_id, to_list, author }` → updated item in destination list
+
+### Links (Step 5)
+- `note_link` — `{ from_item_id, to_item_id?, external_url?, relation, author }` → `item_links` row
+- `note_links` — `{ item_id }` → `{ outgoing: [...], incoming: [...] }` (backlinks with resolved other end)
 
 ---
 
@@ -136,8 +140,23 @@ Search uses a hybrid combination of SQLite FTS5 (BM25 keyword) and vector embedd
 - Runs on server boot (backfilling any un-embedded items) and periodically via an unref'd timer (configured by `NOTEKEEPER_EMBED_INTERVAL_MS`).
 - If Ollama is unreachable, `embedding_status` transitions to `'failed'` and logs a warning without throwing. Search requests gracefully degrade to keyword-only results with `degraded: true` and an explanatory note.
 
+## Item Links & Backlinks (§11 Step 5)
+
+Items can be linked to other items (internal links) or URLs (external links) using four explicit relations:
+- `'spawned'` — child task or idea spawned from this item
+- `'blocks'` — dependency blocking this item or target
+- `'related'` — general contextual association
+- `'reference'` — link to documentation, specs, issues, or external resources
+
+### Validation & Behavior
+- **Mutually Exclusive Targets**: Exactly one of `to_item_id` or `external_url` must be provided.
+- **Idempotency**: Duplicate calls for the same `(from_item_id, target, relation)` return the existing `item_links` row instead of creating duplicate records.
+- **Backlink Resolution**: `note_links` and `GET /api/v1/items/:id/links` return `{ outgoing, incoming }`. The other end is resolved with `id`, `title`, and `type`, avoiding extra fetches.
+- **Truthful History & Soft Deletes**: Creating a link involving a tombstoned (soft-deleted) item is rejected with an error. If an item was linked while live and its target/source is soft-deleted later, the link remains present in `outgoing` and `incoming`, marked with `deleted: true` on that end.
+
 ---
 
 ## Audit & Revisions (§13b.2)
 Every mutation writes an audit revision snapshot with a `kind` column (`'create' | 'edit' | 'complete' | 'reopen' | 'delete' | 'restore' | 'move'`). The service layer supports an edit coalescing policy for client autosave within 5-minute windows by the same author (activated via `autosave: true` in REST). MCP agent mutations always snapshot immutably (`coalesce: false`).
+
 

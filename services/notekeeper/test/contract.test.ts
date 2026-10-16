@@ -351,7 +351,7 @@ describe('Contract Tests: MCP and REST Parity & HTTP Semantics', () => {
     expect(getRes.data.revisions).toHaveLength(2); // Coalesced!
   });
 
-  it('HTTP error semantics: 400 for bad input, 404 for missing/deleted, 501 for links', async () => {
+  it('HTTP error semantics: 400 for bad input, 404 for missing/deleted', async () => {
     // 400: missing title
     const badAdd = await rest('/api/v1/items', {
       method: 'POST',
@@ -374,14 +374,185 @@ describe('Contract Tests: MCP and REST Parity & HTTP Semantics', () => {
     // 404: nonexistent list
     const missingList = await rest('/api/v1/lists/nonexistent-list-id');
     expect(missingList.status).toBe(404);
+  });
 
-    // 501: links placeholders
-    const getLinks = await rest(`/api/v1/items/${note}/links`);
-    expect(getLinks.status).toBe(501);
-    expect(getLinks.data.error).toMatch(/links arrive in step 5/i);
+  it('links: MCP and REST parity for internal/external links, backlinks, duplicates, and deleted ends', async () => {
+    // 1. Setup items
+    const aRes = await rest('/api/v1/items', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Alpha Note', author: 'scotty' }),
+    });
+    const itemAId = aRes.data.id;
 
-    const postLinks = await rest(`/api/v1/items/${note}/links`, { method: 'POST', body: JSON.stringify({}) });
-    expect(postLinks.status).toBe(501);
+    const bRes = await rest('/api/v1/items', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Beta Task', type: 'task', author: 'scotty' }),
+    });
+    const itemBId = bRes.data.id;
+
+    // 2. Create internal link via MCP: A -> B ('blocks')
+    const mcpLinkCall = await mcpClient.callTool({
+      name: 'note_link',
+      arguments: {
+        from_item_id: itemAId,
+        to_item_id: itemBId,
+        relation: 'blocks',
+        author: 'cooper',
+      },
+    });
+    expect(mcpLinkCall.isError).toBeFalsy();
+    const mcpLinkData = JSON.parse((mcpLinkCall.content[0] as any).text);
+
+    // Read back via REST GET /items/:id/links
+    const restLinksARes = await rest(`/api/v1/items/${itemAId}/links`);
+    expect(restLinksARes.status).toBe(200);
+    expect(restLinksARes.data.outgoing).toHaveLength(1);
+    const restOut = restLinksARes.data.outgoing[0];
+    expect(restOut.id).toBe(mcpLinkData.id);
+    expect(restOut.from_item_id).toBe(itemAId);
+    expect(restOut.to_item_id).toBe(itemBId);
+    expect(restOut.relation).toBe('blocks');
+    expect(restOut.target.title).toBe('Beta Task');
+    expect(restOut.target.type).toBe('task');
+    expect(restOut.target.deleted).toBe(false);
+
+    // Check backlinks on target B via REST
+    const restLinksBRes = await rest(`/api/v1/items/${itemBId}/links`);
+    expect(restLinksBRes.status).toBe(200);
+    expect(restLinksBRes.data.incoming).toHaveLength(1);
+    const restIn = restLinksBRes.data.incoming[0];
+    expect(restIn.id).toBe(mcpLinkData.id);
+    expect(restIn.source.id).toBe(itemAId);
+    expect(restIn.source.title).toBe('Alpha Note');
+    expect(restIn.source.deleted).toBe(false);
+
+    // 3. Create internal link via REST: B -> A ('spawned') (tests author defaulting to 'scotty')
+    const restCreateLinkRes = await rest(`/api/v1/items/${itemBId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({
+        to_item_id: itemAId,
+        relation: 'spawned',
+      }),
+    });
+    expect(restCreateLinkRes.status).toBe(201);
+    const restCreatedLink = restCreateLinkRes.data;
+    expect(restCreatedLink.from_item_id).toBe(itemBId);
+    expect(restCreatedLink.to_item_id).toBe(itemAId);
+    expect(restCreatedLink.relation).toBe('spawned');
+
+    // Read back via MCP note_links on itemA
+    const mcpLinksACall = await mcpClient.callTool({
+      name: 'note_links',
+      arguments: { item_id: itemAId },
+    });
+    expect(mcpLinksACall.isError).toBeFalsy();
+    const mcpLinksA = JSON.parse((mcpLinksACall.content[0] as any).text);
+    expect(mcpLinksA.incoming).toHaveLength(1);
+    expect(mcpLinksA.incoming[0].id).toBe(restCreatedLink.id);
+    expect(mcpLinksA.incoming[0].source.title).toBe('Beta Task');
+
+    // 4. External link via MCP: A -> external URL
+    const mcpExtCall = await mcpClient.callTool({
+      name: 'note_link',
+      arguments: {
+        from_item_id: itemAId,
+        external_url: 'https://github.com/dsect-net/quantum/pull/99',
+        relation: 'reference',
+        author: 'cooper',
+      },
+    });
+    expect(mcpExtCall.isError).toBeFalsy();
+    const mcpExtData = JSON.parse((mcpExtCall.content[0] as any).text);
+
+    // Read back via REST
+    const restLinksA2 = await rest(`/api/v1/items/${itemAId}/links`);
+    const extMatch = restLinksA2.data.outgoing.find((l: any) => l.id === mcpExtData.id);
+    expect(extMatch).toBeDefined();
+    expect(extMatch.external_url).toBe('https://github.com/dsect-net/quantum/pull/99');
+    expect(extMatch.relation).toBe('reference');
+    expect(extMatch.target).toBeNull();
+
+    // 5. External link via REST: B -> external URL
+    const restExtPost = await rest(`/api/v1/items/${itemBId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({
+        external_url: 'https://notion.so/architecture',
+        relation: 'related',
+      }),
+    });
+    expect(restExtPost.status).toBe(201);
+
+    // Read back via MCP
+    const mcpLinksBCall = await mcpClient.callTool({
+      name: 'note_links',
+      arguments: { item_id: itemBId },
+    });
+    const mcpLinksB = JSON.parse((mcpLinksBCall.content[0] as any).text);
+    const mcpExtMatch = mcpLinksB.outgoing.find((l: any) => l.id === restExtPost.data.id);
+    expect(mcpExtMatch).toBeDefined();
+    expect(mcpExtMatch.external_url).toBe('https://notion.so/architecture');
+
+    // 6. Duplicate link returns existing row (REST and MCP)
+    const dupRest = await rest(`/api/v1/items/${itemBId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({
+        to_item_id: itemAId,
+        relation: 'spawned',
+      }),
+    });
+    expect(dupRest.status).toBe(201);
+    expect(dupRest.data.id).toBe(restCreatedLink.id);
+
+    // 7. Validation errors
+    // Both targets
+    const badBoth = await rest(`/api/v1/items/${itemAId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({
+        to_item_id: itemBId,
+        external_url: 'https://example.com',
+        relation: 'related',
+      }),
+    });
+    expect(badBoth.status).toBe(400);
+
+    // Neither target
+    const badNeither = await rest(`/api/v1/items/${itemAId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({ relation: 'related' }),
+    });
+    expect(badNeither.status).toBe(400);
+
+    // Bad relation
+    const badRel = await rest(`/api/v1/items/${itemAId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({ to_item_id: itemBId, relation: 'loves' }),
+    });
+    expect(badRel.status).toBe(400);
+
+    // 8. Soft-deleted item validation & deleted-other-end marking
+    // Soft delete itemB
+    await rest(`/api/v1/items/${itemBId}`, { method: 'DELETE' });
+
+    // Creating link to deleted item is error
+    const linkToDeleted = await rest(`/api/v1/items/${itemAId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({ to_item_id: itemBId, relation: 'related' }),
+    });
+    expect(linkToDeleted.status).toBe(400);
+
+    // Creating link from deleted item is error (404)
+    const linkFromDeleted = await rest(`/api/v1/items/${itemBId}/links`, {
+      method: 'POST',
+      body: JSON.stringify({ to_item_id: itemAId, relation: 'related' }),
+    });
+    expect(linkFromDeleted.status).toBe(404);
+
+    // note_links on live item A still lists the link to B, with deleted: true
+    const linksAfterDelete = await rest(`/api/v1/items/${itemAId}/links`);
+    const linkToB = linksAfterDelete.data.outgoing.find((l: any) => l.to_item_id === itemBId);
+    expect(linkToB).toBeDefined();
+    expect(linkToB.target.deleted).toBe(true);
+    expect(linkToB.deleted).toBe(true);
   });
 
   it('auth: 401 on /api/v1 when NOTEKEEPER_TOKEN is configured and token is missing/invalid', async () => {

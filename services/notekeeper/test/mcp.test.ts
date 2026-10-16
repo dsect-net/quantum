@@ -44,7 +44,7 @@ describe('MCP Tools: Complete Item & List Surface', () => {
     }
   });
 
-  it('registers all 11 item and list MCP tools on tools/list', async () => {
+  it('registers all 14 MCP tools on tools/list', async () => {
     const listResult = await mcpClient.listTools();
     const toolNames = listResult.tools.map((t) => t.name);
 
@@ -59,6 +59,9 @@ describe('MCP Tools: Complete Item & List Surface', () => {
     expect(toolNames).toContain('list_get');
     expect(toolNames).toContain('list_items');
     expect(toolNames).toContain('list_move_item');
+    expect(toolNames).toContain('note_search');
+    expect(toolNames).toContain('note_link');
+    expect(toolNames).toContain('note_links');
   });
 
   it('performs full item lifecycle over MCP: add -> get -> update -> complete -> reopen -> delete -> restore', async () => {
@@ -277,5 +280,69 @@ describe('MCP Tools: Complete Item & List Surface', () => {
     });
     const alphaCounts = JSON.parse((alphaCountsRes.content[0] as any).text);
     expect(alphaCounts.counts.total).toBe(2);
+  });
+
+  it('creates and retrieves links over MCP (note_link and note_links)', async () => {
+    // Add two items
+    const aRes = await mcpClient.callTool({
+      name: 'note_add',
+      arguments: { title: 'MCP Item A', author: 'cooper' },
+    });
+    const itemAId = JSON.parse((aRes.content[0] as any).text).id;
+
+    const bRes = await mcpClient.callTool({
+      name: 'note_add',
+      arguments: { title: 'MCP Item B', author: 'cooper' },
+    });
+    const itemBId = JSON.parse((bRes.content[0] as any).text).id;
+
+    // Link A -> B
+    const linkRes = await mcpClient.callTool({
+      name: 'note_link',
+      arguments: {
+        from_item_id: itemAId,
+        to_item_id: itemBId,
+        relation: 'spawned',
+        author: 'cooper',
+      },
+    });
+    expect(linkRes.isError).toBeFalsy();
+    const linkData = JSON.parse((linkRes.content[0] as any).text);
+    expect(linkData.from_item_id).toBe(itemAId);
+    expect(linkData.to_item_id).toBe(itemBId);
+    expect(linkData.relation).toBe('spawned');
+
+    // Link A -> external URL
+    const extLinkRes = await mcpClient.callTool({
+      name: 'note_link',
+      arguments: {
+        from_item_id: itemAId,
+        external_url: 'https://notion.so/project-page',
+        relation: 'reference',
+        author: 'cooper',
+      },
+    });
+    expect(extLinkRes.isError).toBeFalsy();
+
+    // Retrieve links for B (backlink)
+    const linksBRes = await mcpClient.callTool({
+      name: 'note_links',
+      arguments: { item_id: itemBId },
+    });
+    expect(linksBRes.isError).toBeFalsy();
+    const linksBData = JSON.parse((linksBRes.content[0] as any).text);
+    expect(linksBData.incoming).toHaveLength(1);
+    expect(linksBData.incoming[0].from_item_id).toBe(itemAId);
+    expect(linksBData.incoming[0].source.title).toBe('MCP Item A');
+    expect(linksBData.incoming[0].source.deleted).toBe(false);
+
+    // Retrieve outgoing links for A
+    const linksARes = await mcpClient.callTool({
+      name: 'note_links',
+      arguments: { item_id: itemAId },
+    });
+    expect(linksARes.isError).toBeFalsy();
+    const linksAData = JSON.parse((linksARes.content[0] as any).text);
+    expect(linksAData.outgoing).toHaveLength(2);
   });
 });

@@ -10,6 +10,7 @@ export function registerRestRoutes(app: FastifyInstance, service: NoteKeeperServ
         if (
           notFoundPredicate ||
           message.startsWith('Item not found') ||
+          message.startsWith('Source item not found') ||
           message.startsWith('List not found') ||
           message.startsWith('Destination list not found') ||
           message.startsWith('Parent list not found') ||
@@ -286,13 +287,30 @@ export function registerRestRoutes(app: FastifyInstance, service: NoteKeeperServ
         }
       );
 
-      // 14. Links placeholders (Step 5)
-      api.get('/items/:id/links', async (_req, reply) => {
-        return reply.status(501).send({ error: 'links arrive in step 5' });
+      // 14. Links (Step 5)
+      api.get('/items/:id/links', async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        try {
+          const links = service.getItemLinks(req.params.id);
+          return reply.status(200).send(links);
+        } catch (err) {
+          return handleError(reply, err);
+        }
       });
 
-      api.post('/items/:id/links', async (_req, reply) => {
-        return reply.status(501).send({ error: 'links arrive in step 5' });
+      api.post('/items/:id/links', async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+        try {
+          const body = (req.body as any) || {};
+          const link = service.addLink({
+            from_item_id: req.params.id,
+            to_item_id: body.to_item_id,
+            external_url: body.external_url,
+            relation: body.relation,
+            author: body.author || 'scotty',
+          });
+          return reply.status(201).send(link);
+        } catch (err) {
+          return handleError(reply, err);
+        }
       });
     },
     { prefix: '/api/v1' }

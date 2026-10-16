@@ -7,10 +7,15 @@ import {
   OllamaEmbeddingProvider,
 } from './embeddings.js';
 import {
+  AddLinkInput,
+  IncomingLinkItem,
   Item,
+  ItemLink,
+  ItemLinksResult,
   ItemStatus,
   ItemType,
   ItemWithTags,
+  LinkRelation,
   List,
   ListCounts,
   ListCreateInput,
@@ -20,6 +25,8 @@ import {
   ListWithCounts,
   NoteAddInput,
   NoteUpdateInput,
+  OutgoingLinkItem,
+  ResolvedLinkEnd,
   Revision,
   RevisionKind,
   SearchMatchItem,
@@ -1073,6 +1080,210 @@ export class NoteKeeperService {
       offset,
       degraded: isDegraded,
       message: isDegraded ? 'Embedding provider is unavailable; degraded to keyword search' : undefined,
+    };
+  }
+
+  /**
+   * Add a link between an item and another item or an external URL (§11 Step 5).
+   * Validates both ends, duplicate idempotency, and relation types.
+   */
+  addLink(input: AddLinkInput): ItemLink {
+    if (!input.from_item_id) {
+      throw new Error('from_item_id is required');
+    }
+
+    // 1. Verify from_item exists and is not deleted
+    const fromItem = this.getNote(input.from_item_id);
+    if (!fromItem) {
+      throw new Error('Source item not found or has been deleted');
+    }
+
+    // 2. Validate target: exactly one of to_item_id or external_url
+    const hasToItem = Boolean(input.to_item_id && input.to_item_id.trim());
+    const hasUrl = Boolean(input.external_url && input.external_url.trim());
+
+    if (hasToItem && hasUrl) {
+      throw new Error('Provide either to_item_id or external_url, not both');
+    }
+    if (!hasToItem && !hasUrl) {
+      throw new Error('Either to_item_id or external_url must be provided');
+    }
+
+    // 3. Validate relation
+    const validRelations: LinkRelation[] = ['spawned', 'blocks', 'related', 'reference'];
+    if (!validRelations.includes(input.relation)) {
+      throw new Error(`Invalid link relation: '${input.relation}'. Must be one of: ${validRelations.join(', ')}`);
+    }
+
+    let toItemId: string | null = null;
+    let externalUrl: string | null = null;
+
+    if (hasToItem) {
+      toItemId = input.to_item_id!.trim();
+      if (toItemId === input.from_item_id) {
+        throw new Error('Cannot link an item to itself');
+      }
+      const toItem = this.getNote(toItemId);
+      if (!toItem) {
+        throw new Error('Target item not found or has been deleted');
+      }
+    } else {
+      externalUrl = input.external_url!.trim();
+    }
+
+    // 4. Duplicate identical links (same from/to/relation) -> return existing row
+    if (toItemId) {
+      const existing = this.db
+        .prepare(
+          `SELECT * FROM item_links 
+           WHERE from_item_id = ? AND to_item_id = ? AND relation = ?`
+        )
+        .get(input.from_item_id, toItemId, input.relation) as ItemLink | undefined;
+
+      if (existing) {
+        return existing;
+      }
+    } else if (externalUrl) {
+      const existing = this.db
+        .prepare(
+          `SELECT * FROM item_links 
+           WHERE from_item_id = ? AND external_url = ? AND relation = ?`
+        )
+        .get(input.from_item_id, externalUrl, input.relation) as ItemLink | undefined;
+
+      if (existing) {
+        return existing;
+      }
+    }
+
+    // 5. Insert new link
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+
+    this.db
+      .prepare(
+        `INSERT INTO item_links (id, from_item_id, to_item_id, external_url, relation, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(id, input.from_item_id, toItemId, externalUrl, input.relation, createdAt);
+
+    return {
+      id,
+      from_item_id: input.from_item_id,
+      to_item_id: toItemId,
+      external_url: externalUrl,
+      relation: input.relation,
+      created_at: createdAt,
+    };
+  }
+
+  /**
+   * Get all outgoing and incoming links (backlinks) for an item (§11 Step 5).
+   * Resolves the other end (title and type for items; URL for external).
+   * If the other end was later soft-deleted, it is still included with deleted: true.
+   */
+  getItemLinks(itemId: string): ItemLinksResult {
+    const item = this.getNote(itemId);
+    if (!item) {
+      throw new Error('Item not found or has been deleted');
+    }
+
+    // Outgoing links (from_item_id = itemId)
+    const outgoingRows = this.db
+      .prepare(
+        `SELECT l.*, i.title as target_title, i.type as target_type, i.deleted_at as target_deleted_at
+         FROM item_links l
+         LEFT JOIN items i ON l.to_item_id = i.id
+         WHERE l.from_item_id = ?
+         ORDER BY l.created_at ASC`
+      )
+      .all(itemId) as Array<{
+        id: string;
+        from_item_id: string;
+        to_item_id: string | null;
+        external_url: string | null;
+        relation: LinkRelation;
+        created_at: string;
+        target_title: string | null;
+        target_type: ItemType | null;
+        target_deleted_at: string | null;
+      }>;
+
+    const outgoing: OutgoingLinkItem[] = outgoingRows.map((row) => {
+      let target: ResolvedLinkEnd | null = null;
+      let isDeleted = false;
+
+      if (row.to_item_id) {
+        isDeleted = row.target_deleted_at !== null;
+        target = {
+          id: row.to_item_id,
+          title: row.target_title ?? '[Deleted Item]',
+          type: row.target_type ?? 'note',
+          deleted: isDeleted,
+        };
+      }
+
+      return {
+        id: row.id,
+        from_item_id: row.from_item_id,
+        to_item_id: row.to_item_id,
+        external_url: row.external_url,
+        relation: row.relation,
+        created_at: row.created_at,
+        target,
+        item: target,
+        to_item: target,
+        deleted: isDeleted,
+      };
+    });
+
+    // Incoming links (to_item_id = itemId)
+    const incomingRows = this.db
+      .prepare(
+        `SELECT l.*, i.title as source_title, i.type as source_type, i.deleted_at as source_deleted_at
+         FROM item_links l
+         JOIN items i ON l.from_item_id = i.id
+         WHERE l.to_item_id = ?
+         ORDER BY l.created_at ASC`
+      )
+      .all(itemId) as Array<{
+        id: string;
+        from_item_id: string;
+        to_item_id: string;
+        external_url: string | null;
+        relation: LinkRelation;
+        created_at: string;
+        source_title: string | null;
+        source_type: ItemType | null;
+        source_deleted_at: string | null;
+      }>;
+
+    const incoming: IncomingLinkItem[] = incomingRows.map((row) => {
+      const isDeleted = row.source_deleted_at !== null;
+      const source: ResolvedLinkEnd = {
+        id: row.from_item_id,
+        title: row.source_title ?? '[Deleted Item]',
+        type: row.source_type ?? 'note',
+        deleted: isDeleted,
+      };
+
+      return {
+        id: row.id,
+        from_item_id: row.from_item_id,
+        to_item_id: row.to_item_id,
+        external_url: row.external_url,
+        relation: row.relation,
+        created_at: row.created_at,
+        source,
+        item: source,
+        from_item: source,
+        deleted: isDeleted,
+      };
+    });
+
+    return {
+      outgoing,
+      incoming,
     };
   }
 }

@@ -402,6 +402,61 @@ export function createMcpServer(service: NoteKeeperService): McpServer {
     }
   );
 
+  // 13. note_link
+  server.tool(
+    'note_link',
+    'Create a link between an item and another item or external URL',
+    {
+      from_item_id: z.string().describe('Source item ID (required)'),
+      to_item_id: z.string().optional().describe('Target item ID (internal link)'),
+      external_url: z.string().optional().describe('External target URL (external link)'),
+      relation: z.enum(['spawned', 'blocks', 'related', 'reference']).describe('Link relation type'),
+      author: z.string().describe('Author creating the link (required)'),
+    },
+    async (args) => {
+      try {
+        const link = service.addLink({
+          from_item_id: args.from_item_id,
+          to_item_id: args.to_item_id,
+          external_url: args.external_url,
+          relation: args.relation,
+          author: args.author,
+        });
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(link) }],
+        };
+      } catch (err: any) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: err?.message || String(err) }],
+        };
+      }
+    }
+  );
+
+  // 14. note_links
+  server.tool(
+    'note_links',
+    'Get outgoing links and incoming backlinks for an item',
+    {
+      item_id: z.string().describe('Item ID (required)'),
+    },
+    async ({ item_id }) => {
+      try {
+        const links = service.getItemLinks(item_id);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(links) }],
+        };
+      } catch (err: any) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: err?.message || String(err) }],
+        };
+      }
+    }
+  );
+
   return server;
 }
 

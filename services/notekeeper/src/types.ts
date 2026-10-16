@@ -188,3 +188,60 @@ export interface SearchResult {
   degraded: boolean;
   message?: string;
 }
+
+export type LinkRelation = 'spawned' | 'blocks' | 'related' | 'reference';
+
+export interface ItemLink {
+  id: string;
+  from_item_id: string;
+  to_item_id: string | null;
+  external_url: string | null;
+  relation: LinkRelation;
+  created_at: string;
+}
+
+export interface AddLinkInput {
+  from_item_id: string;
+  to_item_id?: string | null;
+  external_url?: string | null;
+  relation: LinkRelation;
+  author?: string;
+}
+
+export interface ResolvedLinkEnd {
+  id: string;
+  title: string;
+  type: ItemType;
+  deleted: boolean;
+}
+
+export interface OutgoingLinkItem {
+  id: string;
+  from_item_id: string;
+  to_item_id: string | null;
+  external_url: string | null;
+  relation: LinkRelation;
+  created_at: string;
+  target?: ResolvedLinkEnd | null;
+  item?: ResolvedLinkEnd | null;
+  to_item?: ResolvedLinkEnd | null;
+  deleted?: boolean;
+}
+
+export interface IncomingLinkItem {
+  id: string;
+  from_item_id: string;
+  to_item_id: string;
+  external_url: string | null;
+  relation: LinkRelation;
+  created_at: string;
+  source: ResolvedLinkEnd;
+  item: ResolvedLinkEnd;
+  from_item: ResolvedLinkEnd;
+  deleted: boolean;
+}
+
+export interface ItemLinksResult {
+  outgoing: OutgoingLinkItem[];
+  incoming: IncomingLinkItem[];
+}
