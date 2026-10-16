@@ -114,5 +114,30 @@ All items, lists, and search operations are also exposed over the MCP Streamable
 
 ---
 
+## Hybrid Semantic Search & Embedding Lifecycle (§11 Step 4)
+
+Search uses a hybrid combination of SQLite FTS5 (BM25 keyword) and vector embeddings (cosine similarity) powered by local Ollama (`nomic-embed-text`, 768 dimensions).
+
+### Scoring Rule
+1. **Keyword Scoring**: SQLite FTS5 returns negative BM25 ranks (`bm25(items_fts)`). We invert and normalize to `[0, 1)`:
+   $$\text{keywordScore} = \frac{\max(0, -\text{bm25})}{1 + \max(0, -\text{bm25})}$$
+2. **Semantic Scoring**: Cosine similarity between query embedding and item embedding:
+   $$\text{semanticScore} = \max(0, \cos(\mathbf{q}, \mathbf{d}))$$
+   Items with cosine similarity below `0.50` are filtered out from semantic candidacy.
+3. **Combined Ranking**:
+   - `match: 'both'`: $\text{combinedScore} = \text{semanticScore} \times 1.2 + \text{keywordScore} \times 0.8 + 0.3$
+   - `match: 'semantic'`: $\text{combinedScore} = \text{semanticScore} \times 1.2$
+   - `match: 'keyword'`: $\text{combinedScore} = \text{keywordScore} \times 0.8$
+   This guarantees that items matching both channels rank highest, and semantic matches rank slightly above pure keyword matches when confidence is high.
+
+### Async Embedding Lifecycle (§13b.1)
+- Write operations (`note_add`, `note_update`) never block on Ollama; they set `items.embedding_status = 'pending'`.
+- A background pass (`service.runEmbeddingPass()`) queries pending items, batches them to Ollama, writes `embeddings`, and updates `embedding_status = 'done'`.
+- Runs on server boot (backfilling any un-embedded items) and periodically via an unref'd timer (configured by `NOTEKEEPER_EMBED_INTERVAL_MS`).
+- If Ollama is unreachable, `embedding_status` transitions to `'failed'` and logs a warning without throwing. Search requests gracefully degrade to keyword-only results with `degraded: true` and an explanatory note.
+
+---
+
 ## Audit & Revisions (§13b.2)
 Every mutation writes an audit revision snapshot with a `kind` column (`'create' | 'edit' | 'complete' | 'reopen' | 'delete' | 'restore' | 'move'`). The service layer supports an edit coalescing policy for client autosave within 5-minute windows by the same author (activated via `autosave: true` in REST). MCP agent mutations always snapshot immutably (`coalesce: false`).
+

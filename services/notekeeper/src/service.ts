@@ -2,6 +2,11 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { getCurrentSchemaVersion } from './db.js';
 import {
+  cosineSimilarity,
+  EmbeddingProvider,
+  OllamaEmbeddingProvider,
+} from './embeddings.js';
+import {
   Item,
   ItemStatus,
   ItemType,
@@ -23,10 +28,25 @@ import {
 } from './types.js';
 
 export class NoteKeeperService {
-  constructor(private db: Database.Database) {}
+  private embeddingProvider: EmbeddingProvider;
+
+  constructor(
+    private db: Database.Database,
+    embeddingProvider?: EmbeddingProvider
+  ) {
+    this.embeddingProvider = embeddingProvider || new OllamaEmbeddingProvider();
+  }
 
   getDb(): Database.Database {
     return this.db;
+  }
+
+  getEmbeddingProvider(): EmbeddingProvider {
+    return this.embeddingProvider;
+  }
+
+  setEmbeddingProvider(provider: EmbeddingProvider): void {
+    this.embeddingProvider = provider;
   }
 
   getSchemaVersion(): number {
@@ -705,28 +725,94 @@ export class NoteKeeperService {
     };
   }
 
-  searchNotes(options: SearchOptions): SearchResult {
+  /**
+   * Background embedding pass (§13b.1):
+   * Processes items with status 'pending' (or un-embedded items for the current model),
+   * embeds title + body, upserts embeddings row, and marks status 'done'.
+   * On error sets status 'failed' to be retried in a later pass.
+   */
+  async runEmbeddingPass(batchSize = 50): Promise<{ processed: number; succeeded: number; failed: number }> {
+    const modelId = this.embeddingProvider.modelId;
+
+    // Find items that need embedding for this model
+    const candidateRows = this.db
+      .prepare(
+        `SELECT items.id, items.title, items.body, items.embedding_status
+         FROM items
+         LEFT JOIN embeddings ON items.id = embeddings.item_id AND embeddings.model_id = ?
+         WHERE items.deleted_at IS NULL AND (items.embedding_status IN ('pending', 'failed') OR embeddings.item_id IS NULL)
+         LIMIT ?`
+      )
+      .all(modelId, batchSize) as Array<{
+        id: string;
+        title: string;
+        body: string;
+        embedding_status: string;
+      }>;
+
+    if (candidateRows.length === 0) {
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    let succeeded = 0;
+    let failed = 0;
+
+    const upsertStmt = this.db.prepare(`
+      INSERT INTO embeddings (item_id, model_id, vector, embedded_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(item_id, model_id) DO UPDATE SET
+        vector = excluded.vector,
+        embedded_at = excluded.embedded_at
+    `);
+
+    const setStatusStmt = this.db.prepare(`
+      UPDATE items SET embedding_status = ?, updated_at = updated_at WHERE id = ?
+    `);
+
+    for (const row of candidateRows) {
+      const textToEmbed = `${row.title}\n${row.body}`.trim();
+      try {
+        const [vec] = await this.embeddingProvider.embed([textToEmbed]);
+        if (!vec || vec.length === 0) {
+          throw new Error('Empty vector returned from embedding provider');
+        }
+
+        const now = new Date().toISOString();
+        const vectorBuffer = Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
+
+        this.db.transaction(() => {
+          upsertStmt.run(row.id, modelId, vectorBuffer, now);
+          setStatusStmt.run('done', row.id);
+        })();
+
+        succeeded++;
+      } catch (err) {
+        failed++;
+        try {
+          setStatusStmt.run('failed', row.id);
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    return {
+      processed: candidateRows.length,
+      succeeded,
+      failed,
+    };
+  }
+
+  /**
+   * Hybrid search: FTS5 keyword candidates + embedding cosine-similarity candidates.
+   * Merges matches, ranks semantic matches above pure keyword matches when scores are close,
+   * and degrades gracefully to keyword-only when the embedding provider is unreachable.
+   */
+  async searchNotes(options: SearchOptions): Promise<SearchResult> {
     const rawQuery = (options.query || '').trim();
     const whereClauses: string[] = ['items.deleted_at IS NULL'];
     const params: any[] = [];
     const joins: string[] = [];
-
-    let hasFts = false;
-    if (rawQuery) {
-      const tokens = rawQuery
-        .replace(/[^a-zA-Z0-9_\s]/g, ' ')
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-      if (tokens.length > 0) {
-        const ftsQuery = tokens.map((t) => `"${t}"*`).join(' ');
-        joins.push('JOIN items_fts ON items.rowid = items_fts.rowid');
-        whereClauses.push('items_fts MATCH ?');
-        params.push(ftsQuery);
-        hasFts = true;
-      }
-    }
 
     if (options.list) {
       const list = this.resolveList(options.list);
@@ -780,40 +866,213 @@ export class NoteKeeperService {
     }
 
     const joinSql = joins.join(' ');
-    const whereSql = whereClauses.join(' AND ');
+    const baseWhereSql = whereClauses.join(' AND ');
 
-    const countSql = `SELECT COUNT(DISTINCT items.id) as total FROM items ${joinSql} WHERE ${whereSql}`;
-    const totalRow = this.db.prepare(countSql).get(...params) as { total: number };
-    const total = totalRow?.total ?? 0;
+    // Check embedding provider health
+    let isProviderHealthy = false;
+    try {
+      isProviderHealthy = await this.embeddingProvider.health();
+    } catch {
+      isProviderHealthy = false;
+    }
 
+    // Map of itemId -> { item, keywordScore, semanticScore, bm25Rank }
+    const candidateMap = new Map<
+      string,
+      {
+        item: Item;
+        keywordScore: number;
+        semanticScore: number;
+      }
+    >();
+
+    // 1. Keyword candidates via FTS5
+    if (rawQuery) {
+      const tokens = rawQuery
+        .replace(/[^a-zA-Z0-9_\s]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if (tokens.length > 0) {
+        const ftsQuery = tokens.map((t) => `"${t}"*`).join(' OR ');
+        const ftsSql = `
+          SELECT items.*, bm25(items_fts) as rank
+          FROM items
+          JOIN items_fts ON items.rowid = items_fts.rowid
+          ${joinSql}
+          WHERE ${baseWhereSql} AND items_fts MATCH ?
+          ORDER BY bm25(items_fts) ASC
+          LIMIT 100
+        `;
+
+        try {
+          const ftsRows = this.db.prepare(ftsSql).all(...params, ftsQuery) as Array<Item & { rank: number }>;
+          for (const row of ftsRows) {
+            // bm25 rank is negative (lower = better). Normalize to positive 0..1
+            const normalizedRank = Math.max(0, -row.rank);
+            const keywordScore = normalizedRank / (1.0 + normalizedRank);
+            candidateMap.set(row.id, {
+              item: row,
+              keywordScore,
+              semanticScore: 0,
+            });
+          }
+        } catch {
+          // FTS match failed (syntax or table issue)
+        }
+      }
+    }
+
+    // 2. Semantic candidates via vector cosine similarity
+    let semanticSucceeded = false;
+    if (isProviderHealthy && rawQuery) {
+      try {
+        const [queryVec] = await this.embeddingProvider.embed([rawQuery]);
+        if (queryVec && queryVec.length > 0) {
+          // Fetch candidate embeddings for current model in scope
+          const embSql = `
+            SELECT items.*, embeddings.vector
+            FROM items
+            JOIN embeddings ON items.id = embeddings.item_id AND embeddings.model_id = ?
+            ${joinSql}
+            WHERE ${baseWhereSql}
+          `;
+
+          const embRows = this.db.prepare(embSql).all(this.embeddingProvider.modelId, ...params) as Array<
+            Item & { vector: Buffer }
+          >;
+
+          for (const row of embRows) {
+            const itemVec = new Float32Array(
+              row.vector.buffer,
+              row.vector.byteOffset,
+              row.vector.byteLength / 4
+            );
+            const sim = cosineSimilarity(queryVec, itemVec);
+
+            // Consider semantic match if cosine similarity is >= 0.50
+            if (sim >= 0.50) {
+              const existing = candidateMap.get(row.id);
+              if (existing) {
+                existing.semanticScore = sim;
+              } else {
+                candidateMap.set(row.id, {
+                  item: row,
+                  keywordScore: 0,
+                  semanticScore: sim,
+                });
+              }
+            }
+          }
+          semanticSucceeded = true;
+        }
+      } catch {
+        semanticSucceeded = false;
+      }
+    }
+
+    // If query is empty, return latest active items
+    if (!rawQuery) {
+      const selectSql = `
+        SELECT DISTINCT items.* FROM items 
+        ${joinSql} 
+        WHERE ${baseWhereSql} 
+        ORDER BY items.updated_at DESC 
+        LIMIT ? OFFSET ?
+      `;
+      const countSql = `SELECT COUNT(DISTINCT items.id) as total FROM items ${joinSql} WHERE ${baseWhereSql}`;
+      const totalRow = this.db.prepare(countSql).get(...params) as { total: number };
+      const total = totalRow?.total ?? 0;
+
+      const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+      const offset = Math.max(options.offset ?? 0, 0);
+
+      const rows = this.db.prepare(selectSql).all(...params, limit, offset) as Item[];
+      const results: SearchMatchItem[] = rows.map((item) => ({
+        item: {
+          ...item,
+          tags: this.getItemTags(item.id),
+        },
+        match: 'keyword',
+        score: 0,
+      }));
+
+      return {
+        results,
+        total,
+        limit,
+        offset,
+        degraded: !isProviderHealthy,
+        message: !isProviderHealthy ? 'Embedding provider is unavailable; degraded to keyword search' : undefined,
+      };
+    }
+
+    // Combine and rank candidates
+    const scoredCandidates: Array<{
+      item: Item;
+      match: 'keyword' | 'semantic' | 'both';
+      combinedScore: number;
+    }> = [];
+
+    for (const cand of candidateMap.values()) {
+      const hasKeyword = cand.keywordScore > 0;
+      const hasSemantic = cand.semanticScore >= 0.50;
+
+      let match: 'keyword' | 'semantic' | 'both' = 'keyword';
+      let combinedScore = 0;
+
+      if (hasKeyword && hasSemantic) {
+        match = 'both';
+        // Matched both: weighted combination + synergy bonus
+        combinedScore = cand.semanticScore * 1.2 + cand.keywordScore * 0.8 + 0.3;
+      } else if (hasSemantic) {
+        match = 'semantic';
+        // Semantic matches weighted higher than pure keyword matches when scores are close
+        combinedScore = cand.semanticScore * 1.2;
+      } else {
+        match = 'keyword';
+        combinedScore = cand.keywordScore * 0.8;
+      }
+
+      scoredCandidates.push({
+        item: cand.item,
+        match,
+        combinedScore,
+      });
+    }
+
+    // Sort by combined score descending, then updated_at descending
+    scoredCandidates.sort((a, b) => {
+      if (Math.abs(b.combinedScore - a.combinedScore) > 0.0001) {
+        return b.combinedScore - a.combinedScore;
+      }
+      return new Date(b.item.updated_at).getTime() - new Date(a.item.updated_at).getTime();
+    });
+
+    const total = scoredCandidates.length;
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
     const offset = Math.max(options.offset ?? 0, 0);
 
-    const orderBy = hasFts ? 'bm25(items_fts) ASC, items.updated_at DESC' : 'items.updated_at DESC';
-    const selectSql = `
-      SELECT DISTINCT items.* FROM items 
-      ${joinSql} 
-      WHERE ${whereSql} 
-      ORDER BY ${orderBy} 
-      LIMIT ? OFFSET ?
-    `;
-
-    const rows = this.db.prepare(selectSql).all(...params, limit, offset) as Item[];
-    const results: SearchMatchItem[] = rows.map((item) => ({
+    const paginated = scoredCandidates.slice(offset, offset + limit);
+    const results: SearchMatchItem[] = paginated.map((c) => ({
       item: {
-        ...item,
-        tags: this.getItemTags(item.id),
+        ...c.item,
+        tags: this.getItemTags(c.item.id),
       },
-      match: 'keyword',
+      match: c.match,
+      score: Math.round(c.combinedScore * 1000) / 1000,
     }));
+
+    const isDegraded = !isProviderHealthy || !semanticSucceeded;
 
     return {
       results,
       total,
       limit,
       offset,
-      degraded: true,
-      message: 'Semantic search lands in Step 4; currently using FTS5 keyword search',
+      degraded: isDegraded,
+      message: isDegraded ? 'Embedding provider is unavailable; degraded to keyword search' : undefined,
     };
   }
 }

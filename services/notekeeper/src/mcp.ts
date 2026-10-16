@@ -377,7 +377,7 @@ export function createMcpServer(service: NoteKeeperService): McpServer {
     },
     async (args) => {
       try {
-        const result = service.searchNotes({
+        const result = await service.searchNotes({
           query: args.query,
           list: args.list,
           category: args.category,

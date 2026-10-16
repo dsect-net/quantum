@@ -269,7 +269,7 @@ describe('Contract Tests: MCP and REST Parity & HTTP Semantics', () => {
     // REST search
     const restSearch = await rest('/api/v1/search?q=Telemetry');
     expect(restSearch.status).toBe(200);
-    expect(restSearch.data.degraded).toBe(true);
+    expect(typeof restSearch.data.degraded).toBe('boolean');
     expect(restSearch.data.results.length).toBeGreaterThanOrEqual(1);
 
     // MCP search
@@ -278,7 +278,7 @@ describe('Contract Tests: MCP and REST Parity & HTTP Semantics', () => {
       arguments: { query: 'Telemetry' },
     });
     const mcpSearchData = JSON.parse((mcpSearch.content[0] as any).text);
-    expect(mcpSearchData.degraded).toBe(true);
+    expect(mcpSearchData.degraded).toBe(restSearch.data.degraded);
     expect(mcpSearchData.results.length).toBeGreaterThanOrEqual(1);
 
     // Verify result shapes match

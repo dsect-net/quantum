@@ -266,7 +266,7 @@ export function registerRestRoutes(app: FastifyInstance, service: NoteKeeperServ
             const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
             const offset = req.query.offset ? parseInt(req.query.offset, 10) : undefined;
 
-            const searchResult = service.searchNotes({
+            const searchResult = await service.searchNotes({
               query: req.query.q || '',
               list: req.query.list,
               category: req.query.category,

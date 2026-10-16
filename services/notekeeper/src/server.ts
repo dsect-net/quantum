@@ -7,6 +7,7 @@ import { seedIfEmpty } from './seed.js';
 import { NoteKeeperService } from './service.js';
 import { createMcpServer } from './mcp.js';
 import { registerRestRoutes } from './rest.js';
+import { EmbeddingProvider } from './embeddings.js';
 import { HealthResponse } from './types.js';
 
 export interface ServerOptions {
@@ -15,6 +16,7 @@ export interface ServerOptions {
   port?: number;
   host?: string;
   logger?: boolean;
+  embeddingProvider?: EmbeddingProvider;
 }
 
 export interface ServerInstance {
@@ -28,7 +30,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerI
   const db = openDatabase(options.dbPath);
   seedIfEmpty(db);
 
-  const service = new NoteKeeperService(db);
+  const service = new NoteKeeperService(db, options.embeddingProvider);
   const mcpServer = createMcpServer(service);
 
   const mcpTransport = new StreamableHTTPServerTransport({
@@ -108,6 +110,31 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerI
   const port = options.port ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 8791);
   const host = options.host ?? (process.env.HOST || '0.0.0.0');
 
+  // Background embedding pass timer & startup backfill (§13b.1)
+  const intervalMs =
+    process.env.NOTEKEEPER_EMBED_INTERVAL_MS !== undefined
+      ? parseInt(process.env.NOTEKEEPER_EMBED_INTERVAL_MS, 10)
+      : 60000;
+
+  let embedTimer: NodeJS.Timeout | null = null;
+  let backfillTimer: NodeJS.Timeout | null = null;
+
+  if (intervalMs > 0) {
+    embedTimer = setInterval(() => {
+      service.runEmbeddingPass().catch((err) => {
+        app.log.warn({ err }, 'Background embedding pass failed');
+      });
+    }, intervalMs);
+    embedTimer.unref();
+
+    backfillTimer = setTimeout(() => {
+      service.runEmbeddingPass().catch((err) => {
+        app.log.warn({ err }, 'Startup embedding backfill failed');
+      });
+    }, 50);
+    backfillTimer.unref();
+  }
+
   return {
     app,
     service,
@@ -116,6 +143,8 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerI
       return address;
     },
     close: async () => {
+      if (embedTimer) clearInterval(embedTimer);
+      if (backfillTimer) clearTimeout(backfillTimer);
       await app.close();
       db.close();
     },
