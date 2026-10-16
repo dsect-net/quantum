@@ -137,6 +137,64 @@ export class BankApiClient {
     if (Array.isArray(res)) return res;
     return res?.transactions || [];
   }
+  // ==========================================
+  // SCHEDULED PAYMENTS (Amendment A4 / Chunk 5)
+  // ==========================================
+
+  public async listScheduledPayments(options: {
+    account?: string;
+    status?: import('../types.js').ScheduleStatus;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<import('../types.js').ScheduledPayment[]> {
+    const params = new URLSearchParams();
+    if (options.account) params.append('account', options.account);
+    if (options.status) params.append('status', options.status);
+    if (options.limit !== undefined) params.append('limit', options.limit.toString());
+    if (options.offset !== undefined) params.append('offset', options.offset.toString());
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.request<import('../types.js').ScheduledPayment[]>(`/api/v1/schedules${query}`);
+  }
+
+  public async getScheduledPayment(id: string): Promise<import('../types.js').ScheduleDetailResponse> {
+    return this.request<import('../types.js').ScheduleDetailResponse>(
+      `/api/v1/schedules/${encodeURIComponent(id)}`
+    );
+  }
+
+  public async createScheduledPayment(
+    input: import('../types.js').CreateScheduledPaymentInput
+  ): Promise<import('../types.js').ScheduledPayment> {
+    return this.request<import('../types.js').ScheduledPayment>('/api/v1/schedules', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  public async cancelScheduledPayment(
+    id: string,
+    callerAccount?: string
+  ): Promise<import('../types.js').ScheduledPayment> {
+    return this.request<import('../types.js').ScheduledPayment>(
+      `/api/v1/schedules/${encodeURIComponent(id)}/cancel`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ caller_account: callerAccount }),
+      }
+    );
+  }
+
+  public async processDueScheduledPayments(
+    now?: string,
+    blockHeight?: number
+  ): Promise<import('../types.js').ProcessScheduledPaymentsResult> {
+    return this.request<import('../types.js').ProcessScheduledPaymentsResult>('/api/v1/schedules/process', {
+      method: 'POST',
+      body: JSON.stringify({ now, block_height: blockHeight }),
+    });
+  }
 }
 
 export const api = new BankApiClient();
+

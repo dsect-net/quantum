@@ -8,22 +8,27 @@ import {
   formatBankAccountId,
 } from '../utils/currency.js';
 import { validateTransfer } from '../utils/validation.js';
+import { BankView } from '../types.js';
 import {
   ArrowLeftRight,
   ArrowRight,
   Send,
   CheckCircle2,
   AlertCircle,
-  Clock,
   Wallet,
   PiggyBank,
   Info,
+  CalendarClock,
 } from 'lucide-react';
 import { Modal } from '../components/Modal.js';
 
 type TransferMode = 'own' | 'third_party';
 
-export const MoveMoneyView: React.FC = () => {
+interface MoveMoneyViewProps {
+  onNavigate?: (view: BankView) => void;
+}
+
+export const MoveMoneyView: React.FC<MoveMoneyViewProps> = ({ onNavigate }) => {
   const {
     allAccounts,
     actingAccount,
@@ -130,7 +135,7 @@ export const MoveMoneyView: React.FC = () => {
       </div>
 
       {/* Mode Selector Tabs */}
-      <div className="grid grid-cols-2 gap-1 p-1 bg-neutral-100 rounded-xl">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 p-1 bg-neutral-100 rounded-xl">
         <button
           type="button"
           data-testid="mode-own-button"
@@ -166,6 +171,18 @@ export const MoveMoneyView: React.FC = () => {
           <Send className="w-3.5 h-3.5" />
           <span>To Another Account</span>
         </button>
+
+        {onNavigate && (
+          <button
+            type="button"
+            data-testid="mode-scheduled-button"
+            onClick={() => onNavigate('scheduled')}
+            className="flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium text-neutral-500 hover:text-neutral-700 transition-colors cursor-pointer col-span-2 sm:col-span-1"
+          >
+            <CalendarClock className="w-3.5 h-3.5 text-violet-600" />
+            <span>Scheduled Orders</span>
+          </button>
+        )}
       </div>
 
       {/* Success Notification */}
@@ -444,19 +461,30 @@ export const MoveMoneyView: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Honest Notice: Scheduled Payments Protocol Gap */}
+      {/* Scheduled & Recurring Payments Live Feature Card */}
       <div
-        data-testid="scheduled-payments-gap-card"
-        className="p-4 bg-neutral-50 border border-neutral-200/90 rounded-2xl text-xs text-neutral-600 space-y-1.5"
+        data-testid="scheduled-payments-feature-card"
+        className="p-4 bg-white border border-neutral-200/90 rounded-2xl text-xs text-neutral-600 shadow-2xs space-y-2"
       >
-        <div className="flex items-center gap-2 font-medium text-neutral-800">
-          <Clock className="w-4 h-4 text-neutral-500" />
-          <span>Scheduled / Recurring Payments Protocol Gap</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 font-semibold text-neutral-900">
+            <CalendarClock className="w-4 h-4 text-violet-600" />
+            <span>Scheduled & Recurring Standing Orders</span>
+          </div>
+          {onNavigate && (
+            <button
+              type="button"
+              data-testid="open-scheduled-payments-button"
+              onClick={() => onNavigate('scheduled')}
+              className="flex items-center gap-1 text-xs font-semibold text-violet-700 hover:text-violet-900 cursor-pointer"
+            >
+              <span>Manage Schedules</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <p className="text-neutral-500 text-[11px] leading-relaxed">
-          The Quantum Credits ledger protocol currently supports atomic, immediate transfers. There is
-          no native daemon or endpoint in the core ledger service for scheduled, recurring, or standing
-          payment orders. Standing payment orders are candidate functionality for Chunk 5.
+          Set up one-off future transfers or recurring standing orders. Schedules execute as signed ledger transfers during block seals with automatic skip protection if balance is insufficient.
         </p>
       </div>
     </div>
