@@ -26,7 +26,7 @@ describe('Fastify Server & Bearer Auth', () => {
     const body = await res.json();
     expect(body).toEqual({
       status: 'ok',
-      schema_version: 1,
+      schema_version: 2,
       lists: 7,
     });
   });

@@ -3,6 +3,14 @@ export type ItemStatus = 'open' | 'done' | 'archived';
 export type ItemPriority = 1 | 2 | 3;
 export type ItemRelation = 'spawned' | 'blocks' | 'related' | 'reference';
 export type EmbeddingStatus = 'pending' | 'done' | 'failed';
+export type RevisionKind =
+  | 'create'
+  | 'edit'
+  | 'complete'
+  | 'reopen'
+  | 'delete'
+  | 'restore'
+  | 'move';
 
 export interface List {
   id: string;
@@ -34,6 +42,11 @@ export interface Item {
   updated_at: string;
   completed_at: string | null;
   deleted_at: string | null;
+}
+
+export interface ItemWithTags extends Item {
+  tags: string[];
+  revisions?: Revision[];
 }
 
 export interface Tag {
@@ -68,6 +81,7 @@ export interface Revision {
   snapshot: string;
   author: string;
   created_at: string;
+  kind: RevisionKind;
 }
 
 export interface ListCounts {
@@ -86,4 +100,58 @@ export interface HealthResponse {
   status: 'ok';
   schema_version: number;
   lists: number;
+}
+
+export interface NoteAddInput {
+  title: string;
+  body?: string;
+  list?: string; // name or id, defaults to 'Ideas & Tasks'
+  type?: ItemType;
+  tags?: string[];
+  priority?: ItemPriority | null;
+  due_at?: string | null;
+  category?: string;
+  linked_source?: string | null;
+  parent_item_id?: string | null;
+  author: string;
+}
+
+export interface NoteUpdateInput {
+  id: string;
+  author: string;
+  title?: string;
+  body?: string;
+  list?: string; // name or id to move to
+  type?: ItemType;
+  tags?: string[];
+  priority?: ItemPriority | null;
+  due_at?: string | null;
+  status?: ItemStatus;
+  linked_source?: string | null;
+  parent_item_id?: string | null;
+  coalesce?: boolean; // service layer only (for app autosave)
+}
+
+export interface ListCreateInput {
+  name: string;
+  category: string;
+  parent_list_id?: string | null;
+  private?: boolean | number;
+  author?: string;
+}
+
+export interface ListItemsOptions {
+  list: string; // name or id
+  status?: ItemStatus;
+  type?: ItemType;
+  include_subitems?: boolean; // default true
+  limit?: number; // default 50, max 200
+  offset?: number; // default 0
+}
+
+export interface ListItemsResult {
+  items: ItemWithTags[];
+  total: number;
+  limit: number;
+  offset: number;
 }

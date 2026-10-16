@@ -31,7 +31,7 @@ async function runSmoke() {
     }
     const health = await healthRes.json();
     console.log('[smoke] Health response:', JSON.stringify(health));
-    if (health.status !== 'ok' || health.schema_version !== 1 || health.lists !== 7) {
+    if (health.status !== 'ok' || health.schema_version !== 2 || health.lists !== 7) {
       throw new Error(`Unexpected health payload: ${JSON.stringify(health)}`);
     }
 

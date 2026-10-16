@@ -49,7 +49,7 @@ describe('Smoke Test: End-to-End Server & MCP', () => {
     const healthJson = await healthRes.json();
     expect(healthJson).toEqual({
       status: 'ok',
-      schema_version: 1,
+      schema_version: 2,
       lists: 7,
     });
 

@@ -11,7 +11,7 @@ export interface Migration {
 const migrations: Migration[] = [
   {
     version: 1,
-    description: 'Initial schema per brief §6 and §13b (lists, items, tags, item_tags, item_links, embeddings, revisions, schema_version, items_fts + triggers)',
+    description: 'Initial schema per brief §6 (lists, items, tags, item_tags, item_links, embeddings, revisions, schema_version, items_fts + triggers)',
     up: (db: Database.Database) => {
       db.exec(`
         CREATE TABLE IF NOT EXISTS lists (
@@ -39,7 +39,6 @@ const migrations: Migration[] = [
           priority         INTEGER NULL CHECK (priority IN (1,2,3)),
           due_at           TEXT NULL,
           linked_source    TEXT NULL,
-          embedding_status TEXT NOT NULL DEFAULT 'pending' CHECK (embedding_status IN ('pending', 'done', 'failed')),
           created_at       TEXT NOT NULL,
           updated_at       TEXT NOT NULL,
           completed_at     TEXT NULL,
@@ -103,6 +102,25 @@ const migrations: Migration[] = [
           INSERT INTO items_fts(rowid, title, body) VALUES (new.rowid, new.title, new.body);
         END;
       `);
+    },
+  },
+  {
+    version: 2,
+    description: 'Add embedding_status to items and kind column to revisions per §13b',
+    up: (db: Database.Database) => {
+      const itemCols = db.prepare('PRAGMA table_info(items)').all() as Array<{ name: string }>;
+      if (!itemCols.some((c) => c.name === 'embedding_status')) {
+        db.exec(
+          "ALTER TABLE items ADD COLUMN embedding_status TEXT NOT NULL DEFAULT 'pending' CHECK (embedding_status IN ('pending', 'done', 'failed'))"
+        );
+      }
+
+      const revCols = db.prepare('PRAGMA table_info(revisions)').all() as Array<{ name: string }>;
+      if (!revCols.some((c) => c.name === 'kind')) {
+        db.exec(
+          "ALTER TABLE revisions ADD COLUMN kind TEXT NOT NULL DEFAULT 'edit' CHECK (kind IN ('create','edit','complete','reopen','delete','restore','move'))"
+        );
+      }
     },
   },
 ];
