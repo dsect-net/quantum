@@ -61,7 +61,12 @@ copied into the entry file.
 ## Scripts
 
 - `npm run dev` — dev server
-- `npm test` — vitest (13 tests: theme boots dark, 5 tabs, settings validation, CSS import)
+- `npm test` — vitest unit/component suite
+- `npm run test:e2e` — Playwright E2E (app-shell smoke: all six tabs, the
+  honest demo / not-connected states, the debug toggle, settings
+  persistence) against a production build at the 390×844 phone viewport;
+  screenshots land in `e2e/screenshots/`. First run on a new machine:
+  `npm run test:e2e:install`.
 - `npm run typecheck` — strict tsc
 - `npm run build` — production build to `dist/`
 - `npx cap sync` — sync web assets to the native project (after `cap add android`)
