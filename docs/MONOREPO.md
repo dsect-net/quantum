@@ -50,6 +50,7 @@
 **Program total: ~26 points.**
 
 ## Guardrails
+- **Stack-affinity guardrail.** The monorepo default is not a gravity well: a component on a foreign runtime — a Python/Demucs audio worker, a native toolchain, GPU-bound processing — is not forced into the TypeScript/pnpm monorepo merely to obey "spin out, don't start out." Heavy or foreign-runtime services stay as isolated containers or in their own repos and talk to the platform over the same contracts as everything else. The monorepo default applies to components that genuinely share Quantum's stack, login, and design language; stack affinity beats repo tidiness. *(From the Cooper × Antigravity joint plan §3; decided by Cooper, Oct 15, 2026, under Scotty's handoff rule.)*
 - One fold at a time; a fold is done only when the app builds and runs from the monorepo (verified against the pushed artifact, not a local tree).
 - Merging a fold = deploying it, per Scotty's standing rule; nothing folds silently.
 - Old repos are archived (not deleted) after a successful fold, with a pointer README to the monorepo.
