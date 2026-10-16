@@ -5,11 +5,9 @@ import { api, Item, List, ItemLinksResult } from '../api';
 import {
   formatDue,
   isDateOnly,
-  getTodayString,
-  getTomorrowString,
-  getNextWeekString,
   toDateInputValue,
 } from '../date';
+import { DueDatePicker } from './DueDatePicker';
 import { IconEdit, IconEye, IconTrash } from './Icons';
 
 interface ItemDetailProps {
@@ -242,11 +240,6 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
   const rawHtml = marked.parse(body || '*No content*');
   const sanitizedHtml = DOMPurify.sanitize(rawHtml as string);
 
-  const isNoDate = !dueAt;
-  const isTodayActive = dueAt === getTodayString();
-  const isTomorrowActive = dueAt === getTomorrowString();
-  const isNextWeekActive = dueAt === getNextWeekString();
-
   const handleSetDue = (val: string | null) => {
     const nextVal = val ? val.trim() : '';
     setDueAt(nextVal);
@@ -420,46 +413,10 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
           {/* Row 4: Due Date (Full-Width with Quick Chips + Native Date Input) */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Due Date</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-              <button
-                type="button"
-                className={`btn btn-sm ${isNoDate ? 'btn-black' : 'btn-secondary'}`}
-                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
-                onClick={() => handleSetDue(null)}
-              >
-                No date
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${isTodayActive ? 'btn-black' : 'btn-secondary'}`}
-                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
-                onClick={() => handleSetDue(getTodayString())}
-              >
-                Today
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${isTomorrowActive ? 'btn-black' : 'btn-secondary'}`}
-                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
-                onClick={() => handleSetDue(getTomorrowString())}
-              >
-                Tomorrow
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${isNextWeekActive ? 'btn-black' : 'btn-secondary'}`}
-                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
-                onClick={() => handleSetDue(getNextWeekString())}
-              >
-                Next week
-              </button>
-            </div>
-            <input
-              type="date"
-              data-testid="item-due-input"
-              className="form-input"
+            <DueDatePicker
               value={dueAt}
-              onChange={(e) => handleSetDue(e.target.value)}
+              onChange={handleSetDue}
+              testId="item-due-input"
             />
           </div>
 

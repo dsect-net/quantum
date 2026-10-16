@@ -207,15 +207,6 @@ export const App: React.FC = () => {
             <span style={{ display: 'inline-flex', alignItems: 'center' }}><IconNotebook size={18} /></span>
             <span className="app-title">Notekeeper</span>
           </div>
-
-          <button
-            type="button"
-            data-testid="global-add-btn"
-            className="btn btn-black btn-sm"
-            onClick={() => handleOpenCapture()}
-          >
-            ＋ Add
-          </button>
         </header>
 
         {/* Main Content */}
@@ -230,8 +221,8 @@ export const App: React.FC = () => {
                     setActiveListId(id);
                     setActiveView('list');
                   }}
-                  onOpenCapture={() => handleOpenCapture()}
                   onOpenDeleted={() => setActiveView('deleted')}
+                  onNavigateDue={() => setActiveTab('due')}
                 />
               )}
 
@@ -308,6 +299,17 @@ export const App: React.FC = () => {
             >
               <IconFolder size={18} />
               <span>Lists</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="global-add-btn"
+              className="bottom-nav-add-btn"
+              onClick={() => handleOpenCapture()}
+              aria-label="Add item"
+              title="Add item"
+            >
+              ＋
             </button>
 
             <button

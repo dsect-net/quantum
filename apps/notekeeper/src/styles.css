@@ -51,7 +51,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding-bottom: 72px; /* bottom bar space */
+  padding-bottom: 96px; /* floating pill bar space */
   position: relative;
 }
 
@@ -102,27 +102,64 @@ body {
   padding: 20px;
 }
 
-/* Bottom Tab Bar */
+/* Bottom Tab Bar (Floating Pill) */
 .bottom-nav {
   position: fixed;
-  bottom: 0;
+  bottom: 16px;
   left: 0;
   right: 0;
-  height: 64px;
-  background: var(--bg-card);
-  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: center;
   z-index: 50;
+  pointer-events: none;
 }
 
 .bottom-nav-inner {
-  width: 100%;
-  max-width: 720px;
+  pointer-events: auto;
+  width: calc(100% - 32px);
+  max-width: 440px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding: 0 12px;
+  padding: 6px 12px;
+  height: 60px;
+}
+
+.bottom-nav-add-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #000000;
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  font-size: 1.5rem;
+  line-height: 1;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.bottom-nav-add-btn:hover {
+  background: #222222;
+  transform: scale(1.06);
+}
+
+.bottom-nav-add-btn:active {
+  transform: scale(0.95);
+}
+
+.bottom-nav-add-btn:focus-visible {
+  outline: 2px solid var(--accent-violet);
+  outline-offset: 2px;
 }
 
 .nav-tab {
@@ -136,7 +173,7 @@ body {
   color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 500;
-  padding: 8px 16px;
+  padding: 6px 14px;
   cursor: pointer;
   border-radius: var(--radius-btn);
   transition: color 0.15s ease;

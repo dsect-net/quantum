@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Item, List } from '../api';
 import { formatDue } from '../date';
+import { excerptText } from '../text';
 import { IconDocument, IconLock } from './Icons';
 
 interface ListViewProps {
@@ -10,7 +11,7 @@ interface ListViewProps {
   onBack: () => void;
   onToggleComplete: (item: Item) => void;
   onSelectItem: (itemId: string) => void;
-  onOpenCapture: (listId: string) => void;
+  onOpenCapture?: (listId: string) => void;
 }
 
 export const ListView: React.FC<ListViewProps> = ({
@@ -20,7 +21,6 @@ export const ListView: React.FC<ListViewProps> = ({
   onBack,
   onToggleComplete,
   onSelectItem,
-  onOpenCapture,
 }) => {
   const [showDone, setShowDone] = useState(false);
 
@@ -76,7 +76,7 @@ export const ListView: React.FC<ListViewProps> = ({
             {item.title}
           </div>
 
-          {item.body && <div className="item-row-snippet">{item.body}</div>}
+          {item.body && <div className="item-row-snippet">{excerptText(item.body)}</div>}
 
           <div className="item-row-meta">
             {dueInfo && (
@@ -105,7 +105,7 @@ export const ListView: React.FC<ListViewProps> = ({
 
   return (
     <div data-testid="list-view">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
         <button
           type="button"
           data-testid="list-back-btn"
@@ -113,15 +113,6 @@ export const ListView: React.FC<ListViewProps> = ({
           onClick={onBack}
         >
           ‹ Lists
-        </button>
-
-        <button
-          type="button"
-          data-testid="list-add-item-btn"
-          className="btn btn-black btn-sm"
-          onClick={() => onOpenCapture(list.id)}
-        >
-          ＋ Add
         </button>
       </div>
 

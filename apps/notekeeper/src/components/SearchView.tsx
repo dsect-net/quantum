@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, List, SearchMatchItem } from '../api';
+import { excerptText } from '../text';
 
 interface SearchViewProps {
   lists: List[];
@@ -67,72 +68,111 @@ export const SearchView: React.FC<SearchViewProps> = ({
         />
       </div>
 
-      {/* Filter chips */}
-      <div className="filter-chips" data-testid="search-filter-chips">
-        {/* Type filter */}
-        <button
-          type="button"
-          data-testid="chip-type-all"
-          className={`chip ${selectedType === '' ? 'active' : ''}`}
-          onClick={() => setSelectedType('')}
-        >
-          All Types
-        </button>
-        <button
-          type="button"
-          data-testid="chip-type-note"
-          className={`chip ${selectedType === 'note' ? 'active' : ''}`}
-          onClick={() => setSelectedType(selectedType === 'note' ? '' : 'note')}
-        >
-          Notes
-        </button>
-        <button
-          type="button"
-          data-testid="chip-type-task"
-          className={`chip ${selectedType === 'task' ? 'active' : ''}`}
-          onClick={() => setSelectedType(selectedType === 'task' ? '' : 'task')}
-        >
-          Tasks
-        </button>
-        <button
-          type="button"
-          data-testid="chip-type-todo"
-          className={`chip ${selectedType === 'todo' ? 'active' : ''}`}
-          onClick={() => setSelectedType(selectedType === 'todo' ? '' : 'todo')}
-        >
-          Todos
-        </button>
+      {/* Filter chips structured into labeled groups with wrapping */}
+      <div data-testid="search-filter-chips" style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+        {/* Type filter group */}
+        <div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Type
+          </div>
+          <div className="filter-chips-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <button
+              type="button"
+              data-testid="chip-type-all"
+              className={`chip ${selectedType === '' ? 'active' : ''}`}
+              onClick={() => setSelectedType('')}
+            >
+              All Types
+            </button>
+            <button
+              type="button"
+              data-testid="chip-type-note"
+              className={`chip ${selectedType === 'note' ? 'active' : ''}`}
+              onClick={() => setSelectedType(selectedType === 'note' ? '' : 'note')}
+            >
+              Notes
+            </button>
+            <button
+              type="button"
+              data-testid="chip-type-task"
+              className={`chip ${selectedType === 'task' ? 'active' : ''}`}
+              onClick={() => setSelectedType(selectedType === 'task' ? '' : 'task')}
+            >
+              Tasks
+            </button>
+            <button
+              type="button"
+              data-testid="chip-type-todo"
+              className={`chip ${selectedType === 'todo' ? 'active' : ''}`}
+              onClick={() => setSelectedType(selectedType === 'todo' ? '' : 'todo')}
+            >
+              Todos
+            </button>
+          </div>
+        </div>
 
-        {/* Status filter */}
-        <button
-          type="button"
-          data-testid="chip-status-open"
-          className={`chip ${selectedStatus === 'open' ? 'active' : ''}`}
-          onClick={() => setSelectedStatus(selectedStatus === 'open' ? '' : 'open')}
-        >
-          Open
-        </button>
-        <button
-          type="button"
-          data-testid="chip-status-done"
-          className={`chip ${selectedStatus === 'done' ? 'active' : ''}`}
-          onClick={() => setSelectedStatus(selectedStatus === 'done' ? '' : 'done')}
-        >
-          Done
-        </button>
+        {/* Status filter group */}
+        <div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Status
+          </div>
+          <div className="filter-chips-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <button
+              type="button"
+              data-testid="chip-status-all"
+              className={`chip ${selectedStatus === '' ? 'active' : ''}`}
+              onClick={() => setSelectedStatus('')}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              data-testid="chip-status-open"
+              className={`chip ${selectedStatus === 'open' ? 'active' : ''}`}
+              onClick={() => setSelectedStatus(selectedStatus === 'open' ? '' : 'open')}
+            >
+              Open
+            </button>
+            <button
+              type="button"
+              data-testid="chip-status-done"
+              className={`chip ${selectedStatus === 'done' ? 'active' : ''}`}
+              onClick={() => setSelectedStatus(selectedStatus === 'done' ? '' : 'done')}
+            >
+              Done
+            </button>
+          </div>
+        </div>
 
-        {/* List filter */}
-        {lists.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            data-testid={`chip-list-${l.id}`}
-            className={`chip ${selectedList === l.id ? 'active' : ''}`}
-            onClick={() => setSelectedList(selectedList === l.id ? '' : l.id)}
-          >
-            {l.name}
-          </button>
-        ))}
+        {/* List filter group */}
+        {lists.length > 0 && (
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              List
+            </div>
+            <div className="filter-chips-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <button
+                type="button"
+                data-testid="chip-list-all"
+                className={`chip ${selectedList === '' ? 'active' : ''}`}
+                onClick={() => setSelectedList('')}
+              >
+                All Lists
+              </button>
+              {lists.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  data-testid={`chip-list-${l.id}`}
+                  className={`chip ${selectedList === l.id ? 'active' : ''}`}
+                  onClick={() => setSelectedList(selectedList === l.id ? '' : l.id)}
+                >
+                  {l.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {degraded && (
@@ -191,7 +231,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     )}
                   </div>
 
-                  {item.body && <div className="item-row-snippet">{item.body}</div>}
+                  {item.body && <div className="item-row-snippet">{excerptText(item.body)}</div>}
 
                   <div className="item-row-meta">
                     <span className="badge">{item.type}</span>

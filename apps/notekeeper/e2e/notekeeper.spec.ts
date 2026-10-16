@@ -110,6 +110,18 @@ test.beforeAll(async () => {
       author: 'scotty',
     }),
   });
+
+  // Fixture 6: Item with markdown formatting in body
+  await fetch(`${apiBase}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: 'Markdown Formatting Sample',
+      body: '## Heading Two\n**Bold feature** and *italic notes* with [Documentation](https://quantum.example.com) and `inline code`.',
+      list: 'Ideas & Tasks',
+      author: 'scotty',
+    }),
+  });
 });
 
 test.afterAll(async () => {
@@ -157,6 +169,13 @@ test.describe('Quantum Notekeeper E2E Tests', () => {
 
     // Fill in title
     await page.fill('[data-testid="capture-title-input"]', 'Buy Groceries For Dinner');
+
+    // Expand More options to access body and type
+    const moreOptionsBtn = page.locator('[data-testid="capture-more-options-btn"]');
+    if (await moreOptionsBtn.isVisible()) {
+      await moreOptionsBtn.click();
+    }
+
     await page.fill('[data-testid="capture-body-input"]', 'Apples, milk, and bread');
     await page.selectOption('[data-testid="capture-type-select"]', 'task');
 
@@ -173,6 +192,27 @@ test.describe('Quantum Notekeeper E2E Tests', () => {
     // Item appears in the list!
     await expect(page.locator('[data-testid="list-view"]')).toBeVisible();
     await expect(page.locator('text=Buy Groceries For Dinner')).toBeVisible();
+  });
+
+  test('2b. quick capture adds item with title only and defaults to todo in Ideas & Tasks', async ({ page }) => {
+    await page.goto('/');
+
+    // Open capture sheet via floating center "+"
+    await page.click('[data-testid="global-add-btn"]');
+    await expect(page.locator('[data-testid="capture-sheet"]')).toBeVisible();
+
+    // Save with only title
+    await page.fill('[data-testid="capture-title-input"]', 'Quick Item Title Only');
+    await page.click('[data-testid="capture-save-btn"]');
+
+    await expect(page.locator('[data-testid="capture-sheet"]')).not.toBeVisible();
+
+    // Navigate to Ideas & Tasks (where quick item lands as inbox todo)
+    const inboxCard = page.locator('[data-testid^="list-card-"]').filter({ hasText: 'Ideas & Tasks' });
+    await inboxCard.click();
+
+    await expect(page.locator('[data-testid="list-view"]')).toBeVisible();
+    await expect(page.locator('text=Quick Item Title Only')).toBeVisible();
   });
 
   test('3. checkbox completes an item and it moves to Done section', async ({ page }) => {
@@ -283,5 +323,45 @@ test.describe('Quantum Notekeeper E2E Tests', () => {
     await expect(dueBadge).toBeVisible();
     const badgeText = await dueBadge.textContent();
     expect(badgeText).toMatch(/^Due:\s+[A-Za-z]+\s+\d{1,2}$/);
+  });
+
+  test('8. home summary strip renders Today and Overdue counts and navigates to Due view', async ({ page }) => {
+    await page.goto('/');
+
+    const summaryStrip = page.locator('[data-testid="home-due-summary-strip"]');
+    await expect(summaryStrip).toBeVisible();
+    await expect(summaryStrip).toContainText('Today:');
+    await expect(summaryStrip).toContainText('Overdue:');
+
+    // Click strip navigates to Due view
+    await summaryStrip.click();
+    await expect(page.locator('[data-testid="due-view"]')).toBeVisible();
+  });
+
+  test('9. markdown-free previews in list view and structured search filters', async ({ page }) => {
+    await page.goto('/');
+
+    // Check list view snippet strips raw markdown
+    const inboxCard = page.locator('[data-testid^="list-card-"]').filter({ hasText: 'Ideas & Tasks' });
+    await inboxCard.click();
+
+    const sampleRow = page.locator('.item-row').filter({ hasText: 'Markdown Formatting Sample' });
+    await expect(sampleRow).toBeVisible();
+    const snippet = sampleRow.locator('.item-row-snippet');
+    await expect(snippet).toBeVisible();
+    const snippetText = await snippet.textContent();
+    // Raw Markdown markers should NOT be present
+    expect(snippetText).not.toContain('##');
+    expect(snippetText).not.toContain('**');
+    expect(snippetText).not.toContain('`');
+    expect(snippetText).toContain('Heading Two Bold feature and italic notes with Documentation and inline code');
+
+    // Check search filter chips are structured and visible
+    await page.click('[data-testid="tab-search"]');
+    await expect(page.locator('[data-testid="search-view"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chip-type-all"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chip-type-task"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chip-status-open"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chip-status-done"]')).toBeVisible();
   });
 });
