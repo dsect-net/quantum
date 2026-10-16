@@ -122,6 +122,19 @@ test.beforeAll(async () => {
       author: 'scotty',
     }),
   });
+
+  // Fixture 7: Long title note for phone viewport testing
+  await fetch(`${apiBase}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: 'Voice-controlled greenhouse controller',
+      body: '## Concept\n\nAutomate the greenhouse with **voice control** and soil sensors.',
+      list: 'Ideas & Tasks',
+      type: 'note',
+      author: 'scotty',
+    }),
+  });
 });
 
 test.afterAll(async () => {
@@ -417,5 +430,66 @@ test.describe('Quantum Notekeeper E2E Tests', () => {
     // All rows in Ideas & Tasks have pop completion style
     const firstRow = page.locator('.item-row').first();
     await expect(firstRow).toHaveAttribute('data-completion-style', 'pop');
+  });
+
+  test('12. detail view at phone viewport has no horizontal overflow and list select is not truncated', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+
+    // Navigate to Ideas & Tasks
+    const inboxCard = page.locator('[data-testid^="list-card-"]').filter({ hasText: 'Ideas & Tasks' });
+    await inboxCard.click();
+
+    // Open "Voice-controlled greenhouse controller"
+    const itemRow = page.locator('.item-row').filter({ hasText: 'Voice-controlled greenhouse controller' });
+    await itemRow.click();
+    await expect(page.locator('[data-testid="item-detail-view"]')).toBeVisible();
+
+    // Assert no horizontal overflow at 390px
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(390);
+
+    // Assert List select is fully rendered without overflow/truncation
+    const listSelect = page.locator('[data-testid="item-list-select"]');
+    await expect(listSelect).toBeVisible();
+    const selectScrollWidth = await listSelect.evaluate((el: HTMLElement) => el.scrollWidth);
+    const selectClientWidth = await listSelect.evaluate((el: HTMLElement) => el.clientWidth);
+    expect(selectScrollWidth).toBeLessThanOrEqual(selectClientWidth);
+
+    // Also assert the selected option text is "Ideas & Tasks"
+    const selectedOptionText = await listSelect.evaluate((el: HTMLSelectElement) => el.options[el.selectedIndex]?.text);
+    expect(selectedOptionText).toContain('Ideas & Tasks');
+  });
+
+  test('13. due quick-pick bucket: capture sheet Today quick pick saves item into Due Today section', async ({ page }) => {
+    await page.goto('/');
+
+    // Open capture sheet via center "+" button
+    await page.click('[data-testid="global-add-btn"]');
+    await expect(page.locator('[data-testid="capture-sheet"]')).toBeVisible();
+
+    // Fill unique title
+    const uniqueTitle = `Quick Due Today Item ${Date.now()}`;
+    await page.fill('[data-testid="capture-title-input"]', uniqueTitle);
+
+    // Expand More options
+    await page.click('[data-testid="capture-more-options-btn"]');
+    await expect(page.locator('[data-testid="capture-more-options-container"]')).toBeVisible();
+
+    // Tap "Today" quick pick chip in due control
+    await page.click('[data-testid="due-chip-today"]');
+
+    // Save
+    await page.click('[data-testid="capture-save-btn"]');
+    await expect(page.locator('[data-testid="capture-sheet"]')).not.toBeVisible();
+
+    // Navigate to Due tab
+    await page.click('[data-testid="tab-due"]');
+    await expect(page.locator('[data-testid="due-view"]')).toBeVisible();
+
+    // Assert item appears in Today section
+    const todaySection = page.locator('[data-testid="section-today"]');
+    await expect(todaySection).toBeVisible();
+    await expect(todaySection.locator('.item-row').filter({ hasText: uniqueTitle })).toBeVisible();
   });
 });

@@ -151,3 +151,79 @@ Running 7 tests using 1 worker
 - **Multi-Tenant User Authentication:** The auth layer uses a single shared bearer token (`NOTEKEEPER_TOKEN`) for local access control. It does not provide per-user password authentication, cryptographic JWTs, or role-based access control.
 - **Hierarchical Item Tree Rendering:** The backend schema and API support `parent_item_id` and recursive sub-item inclusion (`include_subitems: boolean`), but the v1 frontend UI displays items as flat lists.
 - **Push Notifications & Reminders:** Due date alerts and device push notifications are not implemented in v1.
+
+---
+
+## Fix Round (Oct 15)
+
+Scotty reviewed the v1 build screenshots and approved a dedicated fix round covering UX layout defects, capture flow ergonomics, visual polish, and subtle animations. All changes are confined to the frontend application (`apps/notekeeper`) with zero service schema regressions.
+
+### Fixes & Enhancements Summary
+
+1. **Fix 1 — Item Detail Narrow Screen Layout (390×844):**
+   - Replaced fixed single-line input with an auto-resizing full-width `<textarea>` for titles (`scrollHeight`-driven), eliminating horizontal clipping and truncation.
+   - Replaced the multi-column inline grid with a stacked `.detail-meta-card` pattern with labels above controls: List select (full-width, fully readable without ellipsis truncation), Status & Type (2-column row), Priority (full-width), Due Date (full-width), and Tags (full-width).
+2. **Fix 2 — Markdown-Free Previews:**
+   - Implemented `stripMarkdown()` and `excerptText()` in `src/text.ts` to strip raw markdown syntax (`#`, `**`, `*`, `__`, `_`, `~~`, backticks, blockquotes, bullets, numbered lists, images, and link markers) and collapse whitespace.
+   - Applied to item previews in list cards (`ListView.tsx`) and search results (`SearchView.tsx`). Full Markdown rendering remains active in Item Detail.
+3. **Fix 3 — One Capture Door:**
+   - Unified capture into a single primary door per screen: a floating pill bottom navigation bar (`[Lists] [center +] [Due] [Search]`) with a prominent, elevated circular black `+` button (`[data-testid="global-add-btn"]`).
+   - Removed duplicate header `+ Add` button and page-level Add buttons from Lists home and list views.
+4. **Fix 4 — Reusable Due Date Picker:**
+   - Extracted a shared `DueDatePicker` component featuring quick preset chips (`[No date]`, `[Today]`, `[Tomorrow]`, `[Next week]`) and a native `<input type="date">`.
+   - Reused across both `ItemDetail` and `CaptureSheet`. Removed all legacy `datetime-local` inputs (0 hits remaining across repo) while preserving local calendar date semantics (`YYYY-MM-DD`).
+5. **Fix 5 — Quick Capture Sheet:**
+   - Reshaped `CaptureSheet` to lead with a single primary title field (autofocused) and an immediately usable `Save` button. Saving with title only defaults to `Ideas & Tasks` (inbox), `type: 'todo'`, with no due date, priority, or tags.
+   - Secondary fields (Body, List, Type, Due Date, Priority, Tags) are neatly collapsed behind an interactive "More options" expander.
+6. **Fix 6 — Search Filters:**
+   - Restructured search filters into distinct labeled groups (Type: `All Types`, `Notes`, `Tasks`, `Todos`; Status: `All`, `Open`, `Done`; List: `All Lists` + list chips).
+   - Applied `flex-wrap: wrap;` so chips wrap neatly without horizontal edge clipping on 390px mobile screens.
+7. **Fix 7 — Due Screen Color Language:**
+   - Unified due date badge and section count colors: Overdue items use soft red tint (`badge-due-overdue` / `.section-badge.overdue`), Today items use soft amber tint (`badge-due-today` / `.section-badge.today`), and future items remain neutral gray. Completed items do not trigger alert tints.
+8. **Fold-in (a) — Home Summary Strip:**
+   - Added a compact card strip on Lists home (`[data-testid="home-due-summary-strip"]`): `"Today: N · Overdue: M"` with calendar icon (overdue count tints red when `> 0`). Reuses existing open-item REST queries without service modifications. Tapping navigates directly to the Due tab.
+9. **Fold-in (b) — Item Detail Body Editing Model:**
+   - Direct click or tap on rendered markdown switches into edit mode and focuses the textarea. Retained explicit Preview / Edit Notes toggle button and Save button.
+10. **Animation & Interaction Polish:**
+    - **Central Page Transitions:** 180ms ease-out fade and subtle vertical slide (`viewFadeSlideIn`: opacity 0 → 1, translateY 4px → 0) on screen/tab navigation. Clean and modern, with zero bouncy motion.
+    - **Custom Designed Checkbox:** Built `ItemCheckbox` using SVG icon language (`IconCheck`) and rounded border styling, eliminating browser default checkboxes.
+    - **Three Selectable Completion Styles:**
+      - *Pop:* Checkbox scale-up pop emphasis (250ms) + check draw + title strikethrough.
+      - *Sweep:* Left-to-right animated strike line sweep across title (280ms) + soft row fade.
+      - *Minimal:* Clean check mark draw only, no strikethrough, softly dimmed row.
+    - **Settings Surface:** Minimal settings screen reachable via global header gear icon (`[data-testid="header-settings-btn"]`) or Lists home footer. Provides radio options for completion styles, an interactive live preview row, and persistence in `localStorage` (`notekeeper:completion_style`).
+    - **Reduced Motion:** Complete `@media (prefers-reduced-motion: reduce)` safety across all transitions and animations.
+
+### Final Verification Results
+
+- **Backend Unit & Contract Suite (`services/notekeeper`):**
+  - **62 passed, 1 skipped** across 8 test files (`test/seed.test.ts`, `test/db.test.ts`, `test/search.test.ts`, `test/service.test.ts`, `test/smoke.test.ts`, `test/contract.test.ts`, `test/mcp.test.ts`, `test/server.test.ts`).
+- **Frontend Production Build (`apps/notekeeper`):**
+  - `tsc && vite build` completed cleanly with **0 errors**.
+- **Playwright E2E Suite (`apps/notekeeper`):**
+  - **14 passed** (up from 7 in v1 baseline):
+    1. Lists home renders 7 lists with Ideas & Tasks first and Mental Health lock
+    2. Capture flow adds an item via UI and it appears without reload
+    3. Quick capture adds item with title only and defaults to inbox todo
+    4. Checkbox completes an item and it moves to Done section
+    5. Item detail edit persists after reload
+    6. Search finds fixture item with meaning match tag
+    7. Due view shows overdue fixture in Overdue section
+    8. Date-only due date regression: item due today appears in Today without time
+    9. Home summary strip renders Today/Overdue counts and navigates to Due view
+    10. Markdown-free previews in list view and structured search filter wrapping
+    11. Settings view allows selecting completion style and persists across reload
+    12. Completing an item with Pop style applies pop class and state
+    13. Detail view at phone viewport (390×844) has no horizontal overflow and list select is not truncated
+    14. Due quick-pick bucket: capture sheet Today quick pick saves item into Due Today section
+- **Visual Evidence Screenshots (`/mnt/fast/quantum-os/antigravity/work/notekeeper-build/f1-shots/`):**
+  - `f1-item-detail-phone.png` — Greenhouse item detail at 390×844 showing new meta card and non-truncated select.
+  - `f1-list-view-phone.png` — List view showing markdown-free body snippet and custom checkboxes.
+  - `f1-capture-sheet-phone.png` — Quick capture sheet with title field and collapsed More options.
+  - `f1-capture-expanded-phone.png` — Capture sheet expanded showing due quick picks and secondary fields.
+  - `f1-search-phone.png` — Search results with semantic meaning match tag and wrapped Type/Status filter chips.
+  - `f1-due-phone.png` — Due view with red overdue and amber today status badges.
+  - `f1-lists-home-phone.png` — Lists home with summary strip and floating pill bottom tab bar.
+  - `f1-completion-pop-phone.png` — List view showing completed item with Pop style check and strike.
+  - `f1-settings-phone.png` — Settings screen showing completion style radio options and live preview.
+

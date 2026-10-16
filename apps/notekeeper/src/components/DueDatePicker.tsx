@@ -32,6 +32,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
         <button
           type="button"
+          data-testid="due-chip-no-date"
           className={`btn btn-sm ${isNoDate ? 'btn-black' : 'btn-secondary'}`}
           style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
           onClick={() => onChange(null)}
@@ -40,6 +41,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
         </button>
         <button
           type="button"
+          data-testid="due-chip-today"
           className={`btn btn-sm ${isTodayActive ? 'btn-black' : 'btn-secondary'}`}
           style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
           onClick={() => onChange(todayStr)}
@@ -48,6 +50,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
         </button>
         <button
           type="button"
+          data-testid="due-chip-tomorrow"
           className={`btn btn-sm ${isTomorrowActive ? 'btn-black' : 'btn-secondary'}`}
           style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
           onClick={() => onChange(tomorrowStr)}
@@ -56,6 +59,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
         </button>
         <button
           type="button"
+          data-testid="due-chip-next-week"
           className={`btn btn-sm ${isNextWeekActive ? 'btn-black' : 'btn-secondary'}`}
           style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 'var(--radius-pill)' }}
           onClick={() => onChange(nextWeekStr)}
