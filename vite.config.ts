@@ -1,7 +1,7 @@
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 const root = __dirname;
 
@@ -25,5 +25,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Playwright specs (e2e/, apps/*/e2e/) are not vitest tests — sweeping
+    // them in made every unit run report failed suites. They run via
+    // `npm run test:e2e` (root) or each app's own Playwright config.
+    exclude: [...configDefaults.exclude, '**/e2e/**'],
   },
 });

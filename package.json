@@ -11,7 +11,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "cap:sync": "cap sync",
-    "cap:add-android": "cap add android"
+    "cap:add-android": "cap add android",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
