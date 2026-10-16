@@ -3,6 +3,7 @@ import { Item, List } from '../api';
 import { formatDue } from '../date';
 import { excerptText } from '../text';
 import { IconDocument, IconLock } from './Icons';
+import { CompletionStyle, ItemCheckbox } from './ItemCheckbox';
 
 interface ListViewProps {
   list: List;
@@ -12,6 +13,7 @@ interface ListViewProps {
   onToggleComplete: (item: Item) => void;
   onSelectItem: (itemId: string) => void;
   onOpenCapture?: (listId: string) => void;
+  completionStyle?: CompletionStyle;
 }
 
 export const ListView: React.FC<ListViewProps> = ({
@@ -21,6 +23,7 @@ export const ListView: React.FC<ListViewProps> = ({
   onBack,
   onToggleComplete,
   onSelectItem,
+  completionStyle = 'pop',
 }) => {
   const [showDone, setShowDone] = useState(false);
 
@@ -36,21 +39,17 @@ export const ListView: React.FC<ListViewProps> = ({
       <div
         key={item.id}
         data-testid={`item-row-${item.id}`}
-        className="item-row"
+        data-completion-style={completionStyle}
+        className={`item-row ${isCompleted ? 'is-completed' : ''} style-${completionStyle} completion-style-${completionStyle}`}
         onClick={() => onSelectItem(item.id)}
       >
         {isTaskOrTodo ? (
-          <input
-            type="checkbox"
-            className="item-checkbox"
-            data-testid={`checkbox-${item.id}`}
+          <ItemCheckbox
             checked={isCompleted}
-            onChange={(e) => {
-              e.stopPropagation();
-              onToggleComplete(item);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`Toggle completion for ${item.title}`}
+            onChange={() => onToggleComplete(item)}
+            testId={`checkbox-${item.id}`}
+            ariaLabel={`Toggle completion for ${item.title}`}
+            completionStyle={completionStyle}
           />
         ) : (
           <div

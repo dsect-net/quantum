@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { api, Item, List } from '../api';
 import { classifyDueBucket, formatDue, isDateOnly } from '../date';
+import { CompletionStyle, ItemCheckbox } from './ItemCheckbox';
 
 interface DueViewProps {
   lists: List[];
   onSelectItem: (itemId: string) => void;
   onToggleComplete: (item: Item) => void;
+  completionStyle?: CompletionStyle;
 }
 
 export const DueView: React.FC<DueViewProps> = ({
   lists,
   onSelectItem,
   onToggleComplete,
+  completionStyle = 'pop',
 }) => {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,22 +96,21 @@ export const DueView: React.FC<DueViewProps> = ({
               <div
                 key={item.id}
                 data-testid={`due-item-${item.id}`}
-                className="item-row"
+                data-completion-style={completionStyle}
+                className={`item-row ${item.status === 'done' ? 'is-completed' : ''} style-${completionStyle} completion-style-${completionStyle}`}
                 onClick={() => onSelectItem(item.id)}
               >
-                <input
-                  type="checkbox"
-                  className="item-checkbox"
+                <ItemCheckbox
                   checked={item.status === 'done'}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    onToggleComplete(item);
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={`Toggle completion for ${item.title}`}
+                  onChange={() => onToggleComplete(item)}
+                  testId={`checkbox-${item.id}`}
+                  completionStyle={completionStyle}
+                  ariaLabel={`Toggle completion for ${item.title}`}
                 />
                 <div className="item-row-content">
-                  <div className="item-row-title">{item.title}</div>
+                  <div className={`item-row-title ${item.status === 'done' ? 'completed' : ''}`}>
+                    {item.title}
+                  </div>
                   <div className="item-row-meta">
                     {(() => {
                       const dueInfo = formatDue(item.due_at);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, List } from '../api';
 import { classifyDueBucket } from '../date';
-import { IconCalendar, IconLock, IconTrash } from './Icons';
+import { IconCalendar, IconGear, IconLock, IconTrash } from './Icons';
 
 interface ListHomeProps {
   lists: List[];
@@ -10,6 +10,7 @@ interface ListHomeProps {
   onOpenCapture?: () => void;
   onOpenDeleted: () => void;
   onNavigateDue?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const ListHome: React.FC<ListHomeProps> = ({
@@ -18,6 +19,7 @@ export const ListHome: React.FC<ListHomeProps> = ({
   onSelectList,
   onOpenDeleted,
   onNavigateDue,
+  onOpenSettings,
 }) => {
   const [dueSummary, setDueSummary] = useState<{ today: number; overdue: number } | null>(null);
 
@@ -148,8 +150,8 @@ export const ListHome: React.FC<ListHomeProps> = ({
         </div>
       )}
 
-      {/* Deleted view entry at bottom */}
-      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+      {/* Footer entries: Deleted and Settings */}
+      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'space-between' }}>
         <button
           type="button"
           data-testid="home-open-deleted-btn"
@@ -158,8 +160,21 @@ export const ListHome: React.FC<ListHomeProps> = ({
           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
         >
           <IconTrash size={15} />
-          <span>View Recently Deleted Items</span>
+          <span>Recently Deleted</span>
         </button>
+
+        {onOpenSettings && (
+          <button
+            type="button"
+            data-testid="home-open-settings-btn"
+            className="btn btn-secondary btn-sm"
+            onClick={onOpenSettings}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <IconGear size={15} />
+            <span>Settings</span>
+          </button>
+        )}
       </div>
     </div>
   );

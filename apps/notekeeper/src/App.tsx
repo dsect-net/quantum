@@ -7,22 +7,47 @@ import { CaptureSheet } from './components/CaptureSheet';
 import { SearchView } from './components/SearchView';
 import { DueView } from './components/DueView';
 import { DeletedView } from './components/DeletedView';
+import { SettingsView } from './components/SettingsView';
+import { CompletionStyle } from './components/ItemCheckbox';
 import {
   IconAlert,
   IconNotebook,
   IconFolder,
   IconCalendar,
   IconSearch,
+  IconGear,
 } from './components/Icons';
 
 export type MainTab = 'lists' | 'due' | 'search';
-export type ActiveView = 'home' | 'list' | 'item' | 'deleted';
+export type ActiveView = 'home' | 'list' | 'item' | 'deleted' | 'settings';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MainTab>('lists');
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+
+  // Completion animation style preference (persisted in localStorage)
+  const [completionStyle, setCompletionStyle] = useState<CompletionStyle>(() => {
+    try {
+      const saved = localStorage.getItem('notekeeper:completion_style');
+      if (saved === 'pop' || saved === 'sweep' || saved === 'minimal') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'pop';
+  });
+
+  const handleSetCompletionStyle = (style: CompletionStyle) => {
+    setCompletionStyle(style);
+    try {
+      localStorage.setItem('notekeeper:completion_style', style);
+    } catch {
+      // ignore
+    }
+  };
 
   const [lists, setLists] = useState<List[]>([]);
   const [loadingLists, setLoadingLists] = useState(true);
@@ -190,10 +215,11 @@ export const App: React.FC = () => {
   };
 
   const currentList = lists.find((l) => l.id === activeListId);
+  const viewKey = `${activeTab}-${activeView}-${activeListId || ''}-${activeItemId || ''}`;
 
   return (
-    <div className="app-viewport">
-      <div className="app-container">
+    <div className="app-viewport" data-completion-style={completionStyle}>
+      <div className={`app-container completion-style-${completionStyle}`} data-completion-style={completionStyle}>
         {/* Offline banner */}
         {isOffline && (
           <div className="offline-banner" data-testid="offline-banner">
@@ -207,80 +233,117 @@ export const App: React.FC = () => {
             <span style={{ display: 'inline-flex', alignItems: 'center' }}><IconNotebook size={18} /></span>
             <span className="app-title">Notekeeper</span>
           </div>
+
+          <button
+            type="button"
+            data-testid="header-settings-btn"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              setActiveTab('lists');
+              setActiveView('settings');
+            }}
+            aria-label="Settings"
+            title="Settings"
+            style={{ padding: '6px 8px', borderRadius: 'var(--radius-btn)' }}
+          >
+            <IconGear size={16} />
+          </button>
         </header>
 
-        {/* Main Content */}
+        {/* Main Content with subtle page transitions */}
         <main className="app-content">
-          {activeTab === 'lists' && (
-            <>
-              {activeView === 'home' && (
-                <ListHome
-                  lists={lists}
-                  loading={loadingLists}
-                  onSelectList={(id) => {
-                    setActiveListId(id);
-                    setActiveView('list');
-                  }}
-                  onOpenDeleted={() => setActiveView('deleted')}
-                  onNavigateDue={() => setActiveTab('due')}
-                />
-              )}
+          <div key={viewKey} className="view-transition">
+            {activeTab === 'lists' && (
+              <>
+                {activeView === 'home' && (
+                  <ListHome
+                    lists={lists}
+                    loading={loadingLists}
+                    onSelectList={(id) => {
+                      setActiveListId(id);
+                      setActiveView('list');
+                    }}
+                    onOpenDeleted={() => setActiveView('deleted')}
+                    onNavigateDue={() => setActiveTab('due')}
+                    onOpenSettings={() => {
+                      setActiveTab('lists');
+                      setActiveView('settings');
+                    }}
+                  />
+                )}
 
-              {activeView === 'list' && currentList && (
-                <ListView
-                  list={currentList}
-                  items={currentListItems}
-                  loading={loadingItems}
-                  onBack={() => {
-                    setActiveView('home');
-                    loadLists();
-                  }}
-                  onToggleComplete={handleToggleComplete}
-                  onSelectItem={(id) => navigateToItem(id)}
-                  onOpenCapture={(listId) => handleOpenCapture(listId)}
-                />
-              )}
+                {activeView === 'list' && currentList && (
+                  <ListView
+                    list={currentList}
+                    items={currentListItems}
+                    loading={loadingItems}
+                    onBack={() => {
+                      setActiveView('home');
+                      loadLists();
+                    }}
+                    onToggleComplete={handleToggleComplete}
+                    onSelectItem={(id) => navigateToItem(id)}
+                    onOpenCapture={(listId) => handleOpenCapture(listId)}
+                    completionStyle={completionStyle}
+                  />
+                )}
 
-              {activeView === 'item' && activeItemId && (
-                <ItemDetail
-                  itemId={activeItemId}
-                  lists={lists}
-                  onBack={navigateBackFromItem}
-                  onDeleted={handleItemDeleted}
-                />
-              )}
+                {activeView === 'item' && activeItemId && (
+                  <ItemDetail
+                    itemId={activeItemId}
+                    lists={lists}
+                    onBack={navigateBackFromItem}
+                    onDeleted={handleItemDeleted}
+                  />
+                )}
 
-              {activeView === 'deleted' && (
-                <DeletedView
-                  onBack={() => setActiveView('home')}
-                  onRestored={(_restored) => {
-                    loadLists();
-                  }}
-                />
-              )}
-            </>
-          )}
+                {activeView === 'deleted' && (
+                  <DeletedView
+                    onBack={() => setActiveView('home')}
+                    onRestored={(_restored) => {
+                      loadLists();
+                    }}
+                  />
+                )}
 
-          {activeTab === 'due' && (
-            <DueView
-              lists={lists}
-              onSelectItem={(id) => {
-                setActiveTab('lists');
-                navigateToItem(id);
-              }}
-              onToggleComplete={handleToggleComplete}
-            />
-          )}
+                {activeView === 'settings' && (
+                  <SettingsView
+                    currentStyle={completionStyle}
+                    onSelectStyle={handleSetCompletionStyle}
+                    onBack={() => {
+                      if (activeListId) {
+                        setActiveView('list');
+                      } else {
+                        setActiveView('home');
+                      }
+                    }}
+                  />
+                )}
+              </>
+            )}
 
-          {activeTab === 'search' && (
-            <SearchView
-              lists={lists}
-              onSelectItem={(id) => {
-                setActiveTab('lists');
-                navigateToItem(id);
-              }}
-            />
-          )}
+            {activeTab === 'due' && (
+              <DueView
+                lists={lists}
+                onSelectItem={(id) => {
+                  setActiveTab('lists');
+                  navigateToItem(id);
+                }}
+                onToggleComplete={handleToggleComplete}
+                completionStyle={completionStyle}
+              />
+            )}
+
+            {activeTab === 'search' && (
+              <SearchView
+                lists={lists}
+                onSelectItem={(id) => {
+                  setActiveTab('lists');
+                  navigateToItem(id);
+                }}
+              />
+            )}
+          </div>
         </main>
 
         {/* Bottom Navigation */}

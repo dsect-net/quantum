@@ -364,4 +364,58 @@ test.describe('Quantum Notekeeper E2E Tests', () => {
     await expect(page.locator('[data-testid="chip-status-open"]')).toBeVisible();
     await expect(page.locator('[data-testid="chip-status-done"]')).toBeVisible();
   });
+
+  test('10. settings view allows selecting completion style and persists across reload', async ({ page }) => {
+    await page.goto('/');
+
+    // Open settings via header gear button
+    await page.click('[data-testid="header-settings-btn"]');
+    await expect(page.locator('[data-testid="settings-view"]')).toBeVisible();
+
+    // Select "Sweep" style
+    await page.click('[data-testid="option-style-sweep"]');
+
+    // Root container reflects completion style
+    await expect(page.locator('.app-container')).toHaveAttribute('data-completion-style', 'sweep');
+
+    // Reload page
+    await page.reload();
+
+    // Verify localStorage persistence
+    await expect(page.locator('.app-container')).toHaveAttribute('data-completion-style', 'sweep');
+
+    // Navigate to a list and verify item rows inherit the sweep style
+    const inboxCard = page.locator('[data-testid^="list-card-"]').filter({ hasText: 'Ideas & Tasks' });
+    await inboxCard.click();
+    await expect(page.locator('.item-row').first()).toHaveAttribute('data-completion-style', 'sweep');
+  });
+
+  test('11. completing an item with Pop style applies pop class and state', async ({ page }) => {
+    await page.goto('/');
+
+    // Open settings and switch back to Pop
+    await page.click('[data-testid="header-settings-btn"]');
+    await expect(page.locator('[data-testid="settings-view"]')).toBeVisible();
+    await page.click('[data-testid="option-style-pop"]');
+    await expect(page.locator('.app-container')).toHaveAttribute('data-completion-style', 'pop');
+
+    // Test live preview toggle
+    const previewRow = page.locator('[data-testid="settings-preview-row"]');
+    await expect(previewRow).toHaveAttribute('data-completion-style', 'pop');
+    await previewRow.click();
+    await expect(previewRow).toHaveClass(/is-completed/);
+    await expect(previewRow).toHaveClass(/style-pop/);
+
+    // Return to Lists home
+    await page.click('[data-testid="settings-back-btn"]');
+    await expect(page.locator('[data-testid="lists-home"]')).toBeVisible();
+
+    // Enter Ideas & Tasks and check open item rows
+    const inboxCard = page.locator('[data-testid^="list-card-"]').filter({ hasText: 'Ideas & Tasks' });
+    await inboxCard.click();
+
+    // All rows in Ideas & Tasks have pop completion style
+    const firstRow = page.locator('.item-row').first();
+    await expect(firstRow).toHaveAttribute('data-completion-style', 'pop');
+  });
 });
