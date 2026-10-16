@@ -6,6 +6,7 @@ import { openDatabase } from './db.js';
 import { seedIfEmpty } from './seed.js';
 import { NoteKeeperService } from './service.js';
 import { createMcpServer } from './mcp.js';
+import { registerRestRoutes } from './rest.js';
 import { HealthResponse } from './types.js';
 
 export interface ServerOptions {
@@ -37,6 +38,20 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerI
 
   const app = fastify({
     logger: options.logger ?? false,
+  });
+
+  // Support empty JSON bodies gracefully on POST/DELETE without error
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body: string, done) => {
+    if (!body || body.trim() === '') {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(body));
+    } catch (err: any) {
+      err.statusCode = 400;
+      done(err, undefined);
+    }
   });
 
   // Auth placeholder per brief §5: if token is set, require Bearer token on /mcp and /api/*
@@ -77,6 +92,9 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerI
       lists: service.getListsCount(),
     };
   });
+
+  // REST API routes under /api/v1
+  registerRestRoutes(app, service);
 
   // MCP Streamable HTTP transport endpoints
   const handleMcp = async (req: any, reply: any) => {

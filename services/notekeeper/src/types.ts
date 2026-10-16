@@ -25,6 +25,11 @@ export interface List {
   updated_at: string;
 }
 
+export interface ListWithCounts extends List {
+  open_count: number;
+  counts: ListCounts;
+}
+
 export interface Item {
   id: string;
   list_id: string;
@@ -154,4 +159,32 @@ export interface ListItemsResult {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface SearchOptions {
+  query: string;
+  list?: string; // name or id
+  category?: string;
+  tag?: string;
+  type?: ItemType;
+  status?: ItemStatus;
+  due_before?: string;
+  due_after?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SearchMatchItem {
+  item: ItemWithTags;
+  match: 'keyword' | 'semantic' | 'both';
+  score?: number;
+}
+
+export interface SearchResult {
+  results: SearchMatchItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  degraded: boolean;
+  message?: string;
 }

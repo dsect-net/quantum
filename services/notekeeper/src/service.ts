@@ -12,10 +12,14 @@ import {
   ListGetResult,
   ListItemsOptions,
   ListItemsResult,
+  ListWithCounts,
   NoteAddInput,
   NoteUpdateInput,
   Revision,
   RevisionKind,
+  SearchMatchItem,
+  SearchOptions,
+  SearchResult,
 } from './types.js';
 
 export class NoteKeeperService {
@@ -40,6 +44,44 @@ export class NoteKeeperService {
     return this.db
       .prepare('SELECT * FROM lists WHERE archived_at IS NULL ORDER BY sort_order ASC, created_at ASC')
       .all() as List[];
+  }
+
+  getListCounts(listId: string): ListCounts {
+    const statusRows = this.db
+      .prepare(
+        `SELECT status, COUNT(*) as count 
+         FROM items 
+         WHERE list_id = ? AND deleted_at IS NULL 
+         GROUP BY status`
+      )
+      .all(listId) as Array<{ status: string; count: number }>;
+
+    const counts: ListCounts = {
+      open: 0,
+      done: 0,
+      archived: 0,
+      total: 0,
+    };
+
+    for (const row of statusRows) {
+      if (row.status === 'open') counts.open = row.count;
+      else if (row.status === 'done') counts.done = row.count;
+      else if (row.status === 'archived') counts.archived = row.count;
+    }
+    counts.total = counts.open + counts.done + counts.archived;
+    return counts;
+  }
+
+  getActiveListsWithCounts(): ListWithCounts[] {
+    const lists = this.getAllLists();
+    return lists.map((list) => {
+      const counts = this.getListCounts(list.id);
+      return {
+        ...list,
+        open_count: counts.open,
+        counts,
+      };
+    });
   }
 
   resolveList(idOrName: string): List | null {
@@ -69,29 +111,7 @@ export class NoteKeeperService {
       return null;
     }
 
-    const statusRows = this.db
-      .prepare(
-        `SELECT status, COUNT(*) as count 
-         FROM items 
-         WHERE list_id = ? AND deleted_at IS NULL 
-         GROUP BY status`
-      )
-      .all(list.id) as Array<{ status: string; count: number }>;
-
-    const counts: ListCounts = {
-      open: 0,
-      done: 0,
-      archived: 0,
-      total: 0,
-    };
-
-    for (const row of statusRows) {
-      if (row.status === 'open') counts.open = row.count;
-      else if (row.status === 'done') counts.done = row.count;
-      else if (row.status === 'archived') counts.archived = row.count;
-    }
-    counts.total = counts.open + counts.done + counts.archived;
-
+    const counts = this.getListCounts(list.id);
     return {
       list,
       counts,
@@ -152,7 +172,7 @@ export class NoteKeeperService {
     return Array.from(normalized).sort();
   }
 
-  private getItemTags(itemId: string): string[] {
+  getItemTags(itemId: string): string[] {
     const rows = this.db
       .prepare(
         `SELECT t.name FROM tags t 
@@ -682,6 +702,118 @@ export class NoteKeeperService {
       total,
       limit,
       offset,
+    };
+  }
+
+  searchNotes(options: SearchOptions): SearchResult {
+    const rawQuery = (options.query || '').trim();
+    const whereClauses: string[] = ['items.deleted_at IS NULL'];
+    const params: any[] = [];
+    const joins: string[] = [];
+
+    let hasFts = false;
+    if (rawQuery) {
+      const tokens = rawQuery
+        .replace(/[^a-zA-Z0-9_\s]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if (tokens.length > 0) {
+        const ftsQuery = tokens.map((t) => `"${t}"*`).join(' ');
+        joins.push('JOIN items_fts ON items.rowid = items_fts.rowid');
+        whereClauses.push('items_fts MATCH ?');
+        params.push(ftsQuery);
+        hasFts = true;
+      }
+    }
+
+    if (options.list) {
+      const list = this.resolveList(options.list);
+      if (list) {
+        whereClauses.push('items.list_id = ?');
+        params.push(list.id);
+      } else {
+        return {
+          results: [],
+          total: 0,
+          limit: options.limit ?? 50,
+          offset: options.offset ?? 0,
+          degraded: true,
+          message: `List not found: ${options.list}`,
+        };
+      }
+    }
+
+    if (options.category) {
+      joins.push('JOIN lists ON items.list_id = lists.id');
+      whereClauses.push('lists.category = ?');
+      params.push(options.category);
+    }
+
+    if (options.tag) {
+      const cleanTag = options.tag.trim().toLowerCase();
+      joins.push('JOIN item_tags it ON items.id = it.item_id');
+      joins.push('JOIN tags t ON it.tag_id = t.id');
+      whereClauses.push('t.name = ?');
+      params.push(cleanTag);
+    }
+
+    if (options.type) {
+      whereClauses.push('items.type = ?');
+      params.push(options.type);
+    }
+
+    if (options.status) {
+      whereClauses.push('items.status = ?');
+      params.push(options.status);
+    }
+
+    if (options.due_before) {
+      whereClauses.push('items.due_at IS NOT NULL AND items.due_at <= ?');
+      params.push(new Date(options.due_before).toISOString());
+    }
+
+    if (options.due_after) {
+      whereClauses.push('items.due_at IS NOT NULL AND items.due_at >= ?');
+      params.push(new Date(options.due_after).toISOString());
+    }
+
+    const joinSql = joins.join(' ');
+    const whereSql = whereClauses.join(' AND ');
+
+    const countSql = `SELECT COUNT(DISTINCT items.id) as total FROM items ${joinSql} WHERE ${whereSql}`;
+    const totalRow = this.db.prepare(countSql).get(...params) as { total: number };
+    const total = totalRow?.total ?? 0;
+
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const offset = Math.max(options.offset ?? 0, 0);
+
+    const orderBy = hasFts ? 'bm25(items_fts) ASC, items.updated_at DESC' : 'items.updated_at DESC';
+    const selectSql = `
+      SELECT DISTINCT items.* FROM items 
+      ${joinSql} 
+      WHERE ${whereSql} 
+      ORDER BY ${orderBy} 
+      LIMIT ? OFFSET ?
+    `;
+
+    const rows = this.db.prepare(selectSql).all(...params, limit, offset) as Item[];
+    const results: SearchMatchItem[] = rows.map((item) => ({
+      item: {
+        ...item,
+        tags: this.getItemTags(item.id),
+      },
+      match: 'keyword',
+    }));
+
+    return {
+      results,
+      total,
+      limit,
+      offset,
+      degraded: true,
+      message: 'Semantic search lands in Step 4; currently using FTS5 keyword search',
     };
   }
 }

@@ -359,5 +359,49 @@ export function createMcpServer(service: NoteKeeperService): McpServer {
     }
   );
 
+  // 12. note_search
+  server.tool(
+    'note_search',
+    'Search notes and tasks using keyword and filters (hybrid ranking)',
+    {
+      query: z.string().describe('Search query text'),
+      list: z.string().optional().describe('Filter by list name or ID'),
+      category: z.string().optional().describe('Filter by list category'),
+      tag: z.string().optional().describe('Filter by tag'),
+      type: z.enum(['note', 'task', 'todo']).optional().describe('Filter by type: note, task, todo'),
+      status: z.enum(['open', 'done', 'archived']).optional().describe('Filter by status: open, done, archived'),
+      due_before: z.string().optional().describe('Due before ISO date'),
+      due_after: z.string().optional().describe('Due after ISO date'),
+      limit: z.number().optional().describe('Pagination limit (default: 50, max: 200)'),
+      offset: z.number().optional().describe('Pagination offset (default: 0)'),
+    },
+    async (args) => {
+      try {
+        const result = service.searchNotes({
+          query: args.query,
+          list: args.list,
+          category: args.category,
+          tag: args.tag,
+          type: args.type,
+          status: args.status,
+          due_before: args.due_before,
+          due_after: args.due_after,
+          limit: args.limit,
+          offset: args.offset,
+        });
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result) }],
+        };
+      } catch (err: any) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: err?.message || String(err) }],
+        };
+      }
+    }
+  );
+
   return server;
 }
+
