@@ -1286,4 +1286,23 @@ export class NoteKeeperService {
       incoming,
     };
   }
+
+  /**
+   * Get soft-deleted items for the Deleted view (§10 Screen 1).
+   */
+  getDeletedItems(limit = 50, offset = 0): { items: ItemWithTags[]; total: number } {
+    const totalRow = this.db
+      .prepare('SELECT COUNT(*) as count FROM items WHERE deleted_at IS NOT NULL')
+      .get() as { count: number };
+    const items = this.db
+      .prepare(
+        'SELECT * FROM items WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT ? OFFSET ?'
+      )
+      .all(limit, offset) as Item[];
+    return {
+      items: items.map((it) => ({ ...it, tags: this.getItemTags(it.id) })),
+      total: totalRow.count,
+    };
+  }
 }
+

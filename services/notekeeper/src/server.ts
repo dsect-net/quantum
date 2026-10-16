@@ -56,6 +56,17 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerI
     }
   });
 
+  // CORS support for web app dev origin
+  app.addHook('onRequest', async (req, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      reply.status(204).send();
+      return reply;
+    }
+  });
+
   // Auth placeholder per brief §5: if token is set, require Bearer token on /mcp and /api/*
   app.addHook('onRequest', async (req, reply) => {
     const configuredToken = options.token ?? process.env.NOTEKEEPER_TOKEN;

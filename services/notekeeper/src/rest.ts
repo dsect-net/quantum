@@ -243,6 +243,18 @@ export function registerRestRoutes(app: FastifyInstance, service: NoteKeeperServ
         }
       });
 
+      // 12b. GET /deleted -> get tombstoned items for Deleted view
+      api.get('/deleted', async (req: FastifyRequest<{ Querystring: { limit?: string; offset?: string } }>, reply) => {
+        try {
+          const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
+          const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
+          const result = service.getDeletedItems(limit, offset);
+          return reply.status(200).send(result);
+        } catch (err) {
+          return handleError(reply, err);
+        }
+      });
+
       // 13. GET /search -> keyword search through service layer
       api.get(
         '/search',
