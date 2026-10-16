@@ -71,11 +71,16 @@ In v1, the bank application interacts with the economy service via a custodial s
 
 ---
 
-## 5. Scheduled Payments Protocol Gap
+## 5. Scheduled & Recurring Payments (Chunk 5 / Amendment A4 §4)
 
-> **KNOWN PROTOCOL GAP**: The core economy service does not currently include a scheduled, deferred, or recurring payments daemon or REST endpoint.
->
-> In accordance with project instructions, scheduled payments are not faked with local-only client state presented as real. Quantum Bank ships Move Money for immediate atomic transfers on the ledger. Scheduled and standing payment orders are formally documented as candidates for Chunk 5 protocol extensions.
+With the delivery of Chunk 5 in the economy service (`quantum-credits`), scheduled and recurring standing payments are natively implemented and enforced directly on the ledger:
+- **Endpoints**: `POST /api/v1/schedules`, `GET /api/v1/schedules`, `GET /api/v1/schedules/:id`, `POST /api/v1/schedules/:id/cancel`, `POST /api/v1/schedules/process`.
+- **Block-Seal Execution**: Due scheduled payments are processed during block seals (`miner.sealBlock`) as standard signed `transfer` transactions.
+- **Occurrence Failure Rules**:
+  - For **recurring schedules**, an occurrence with insufficient funds is recorded as `skipped` (with reason `insufficient_funds`), preserving the active schedule for the next interval without penalizing the user or failing the entire order.
+  - For **one-off schedules**, insufficient funds marks the occurrence as `failed` (terminal).
+- **Service Bounds**: Enforced at the genesis config level: minimum recurrence interval of 60 seconds (`MIN_SCHEDULE_INTERVAL_SECONDS`) and maximum 50 active schedules per account (`MAX_ACTIVE_SCHEDULES_PER_ACCOUNT`).
+- **Authorization**: Only the acting account may authorize schedules originating from itself. Foreign or unsigned creation attempts are strictly rejected.
 
 ---
 

@@ -95,7 +95,7 @@ export interface AccountQuestEarnings {
   records: KnowledgeRecord[];
 }
 
-export type BankView = 'accounts' | 'activity' | 'move-money' | 'income' | 'economy';
+export type BankView = 'accounts' | 'activity' | 'move-money' | 'scheduled' | 'income' | 'economy';
 
 export interface TransferRequest {
   from_account: string;
@@ -110,3 +110,70 @@ export interface RunningBalanceTransaction {
   direction: 'in' | 'out' | 'internal' | 'neutral';
   net_change_units: number;
 }
+
+// ==========================================
+// SCHEDULED PAYMENTS TYPES (Amendment A4 / Chunk 5)
+// ==========================================
+
+export type ScheduleType = 'one_off' | 'recurring';
+export type ScheduleStatus = 'active' | 'cancelled' | 'completed' | 'failed';
+export type ScheduleExecutionStatus = 'succeeded' | 'failed' | 'skipped';
+
+export interface ScheduledPayment {
+  id: string;
+  from_account: string;
+  to_account: string;
+  amount_units: number;
+  schedule_type: ScheduleType;
+  first_due_at: string;
+  next_due_at: string;
+  interval_seconds?: number | null;
+  first_due_block?: number | null;
+  next_due_block?: number | null;
+  interval_blocks?: number | null;
+  memo?: string | null;
+  status: ScheduleStatus;
+  total_executions: number;
+  last_executed_at?: string | null;
+  created_at: string;
+  cancelled_at?: string | null;
+}
+
+export interface ScheduledPaymentExecution {
+  id: string;
+  schedule_id: string;
+  scheduled_for: string;
+  executed_at: string;
+  status: ScheduleExecutionStatus;
+  tx_id?: string | null;
+  reason?: string | null;
+  amount_units: number;
+}
+
+export interface CreateScheduledPaymentInput {
+  from_account: string;
+  to_account: string;
+  amount_units: number;
+  schedule_type?: ScheduleType;
+  first_due_at?: string;
+  interval_seconds?: number;
+  first_due_block?: number;
+  interval_blocks?: number;
+  memo?: string;
+  caller_account?: string;
+  signingPrivateKeyPem?: string;
+}
+
+export interface ScheduleDetailResponse {
+  schedule: ScheduledPayment;
+  executions: ScheduledPaymentExecution[];
+}
+
+export interface ProcessScheduledPaymentsResult {
+  processed_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  skipped_count: number;
+  executions: ScheduledPaymentExecution[];
+}
+

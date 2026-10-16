@@ -203,6 +203,9 @@ test('Complete Quantum Bank E2E Verification & View Inspection Flow', async ({ p
   await expect(page.locator('[data-testid="activity-view"]')).toBeVisible();
   await expect(page.locator('[data-testid="activity-transactions-list"]')).toBeVisible();
 
+  // Wait for transaction rows to load
+  await expect(page.locator('[data-testid^="tx-running-balance-"]').first()).toBeVisible({ timeout: 10000 });
+
   // Verify running balance badges exist on rows
   const runningBalLocators = page.locator('[data-testid^="tx-running-balance-"]');
   const txCount = await runningBalLocators.count();
@@ -240,6 +243,129 @@ test('Complete Quantum Bank E2E Verification & View Inspection Flow', async ({ p
 
   // Capture Screenshot 6: Economy Snapshot View
   await page.screenshot({ path: path.join(screenshotsDir, '06-economy-snapshot-mobile.png') });
+
+  // =========================================================================
+  // 8. Scheduled & Recurring Payments Flow (Amendment A4 / Chunk 5)
+  // =========================================================================
+  console.log('[E2E Step 8] Verifying Scheduled Payments View & Workflows');
+  await page.click('[data-testid="mobile-nav-scheduled"]');
+  await expect(page.locator('[data-testid="scheduled-payments-view"]')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('[data-testid="scheduled-payments-list"]')).toBeVisible();
+  await expect(page.locator('[data-testid="schedule-bounds-notice"]')).toBeVisible();
+
+  // Capture Screenshot 09-scheduled-payments-list.png (Initial state)
+  await page.screenshot({ path: path.join(screenshotsDir, '09-scheduled-payments-list.png') });
+
+  // --- Sub-flow 8a: Create One-off Schedule due soon ---
+  console.log('[E2E Step 8a] Creating one-off scheduled payment due soon');
+  await page.click('[data-testid="create-schedule-button"]');
+  await expect(page.locator('[data-testid="create-schedule-form"]')).toBeVisible();
+
+  // Fill create form
+  await page.selectOption('[data-testid="schedule-recipient-select"]', 'scotty');
+  await page.fill('[data-testid="schedule-amount-input"]', '10.00');
+  await expect(page.locator('[data-testid="schedule-amount-integer-preview"]')).toContainText('1,000 integer units');
+  await page.click('[data-testid="schedule-type-one-off"]');
+  await page.click('[data-testid="due-offset-now"]');
+  await page.fill('[data-testid="schedule-memo-input"]', 'One-off test schedule to Scotty');
+
+  // Capture Screenshot 09-scheduled-create-flow.png
+  await page.screenshot({ path: path.join(screenshotsDir, '09-scheduled-create-flow.png') });
+
+  // Submit creation
+  await page.click('[data-testid="submit-create-schedule-button"]');
+  await expect(page.locator('[data-testid="create-schedule-form"]')).not.toBeVisible({ timeout: 10000 });
+
+  // Verify schedule appears as active
+  const schedule1Card = page.locator('[data-testid^="schedule-card-"]', {
+    hasText: 'One-off test schedule to Scotty',
+  });
+  await expect(schedule1Card).toBeVisible({ timeout: 10000 });
+  await expect(schedule1Card).toContainText(/active/i);
+  await expect(schedule1Card).toContainText('10.00 QC');
+  await expect(schedule1Card).toContainText('1,000 units');
+  await expect(schedule1Card).toContainText('QB-CHK-SCOTTY');
+  await expect(schedule1Card).toContainText('0 executions');
+
+  // --- Sub-flow 8b: Trigger Execution via Block Seal with Miner ---
+  console.log('[E2E Step 8b] Sealing Block 2 to trigger scheduled payment execution');
+  const sealedBlock2 = miner.sealBlock({
+    validators: [
+      { id: 'cooper', privateKeyPem: cooperKeyRow.private_key },
+      { id: 'qubit', privateKeyPem: qubitKeyRow.private_key },
+    ],
+  });
+  console.log(`[E2E Helper] Sealed Block 2 at height ${sealedBlock2?.height} with ${sealedBlock2?.tx_count} txs`);
+
+  // Refresh schedules in UI
+  await page.click('[data-testid="refresh-schedules-button"]');
+  await expect(schedule1Card).toContainText(/completed/i, { timeout: 10000 });
+  await expect(schedule1Card).toContainText('1 execution');
+
+  // --- Sub-flow 8c: Inspect Execution History Modal ---
+  console.log('[E2E Step 8c] Inspecting execution history modal');
+  await schedule1Card.locator('[data-testid^="view-history-button-"]').click();
+  await expect(page.locator('[data-testid="schedule-history-modal"]')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('[data-testid="execution-occurrence-list"]')).toBeVisible();
+  await expect(page.locator('[data-testid^="occurrence-row-"]').first()).toContainText(/succeeded/i);
+  await expect(page.locator('[data-testid^="occurrence-tx-"]').first()).toContainText('TX:');
+
+  // Capture Screenshot 09-scheduled-detail-history.png
+  await page.screenshot({ path: path.join(screenshotsDir, '09-scheduled-detail-history.png') });
+
+  // Close history modal
+  await page.click('button:has-text("Close History")');
+  await expect(page.locator('[data-testid="schedule-history-modal"]')).not.toBeVisible();
+
+  // --- Sub-flow 8d: Activity reflects the transfer ---
+  console.log('[E2E Step 8d] Verifying transfer recorded in Activity view');
+  await page.click('[data-testid="mobile-nav-activity"]');
+  await expect(page.locator('[data-testid="activity-view"]')).toBeVisible();
+  await expect(page.locator('text=One-off test schedule to Scotty').first()).toBeVisible({ timeout: 10000 });
+
+  // --- Sub-flow 8e: Create second schedule & cancel it ---
+  console.log('[E2E Step 8e] Creating second schedule and cancelling it');
+  await page.click('[data-testid="mobile-nav-scheduled"]');
+  await expect(page.locator('[data-testid="scheduled-payments-view"]')).toBeVisible();
+
+  await page.click('[data-testid="create-schedule-button"]');
+  await expect(page.locator('[data-testid="create-schedule-form"]')).toBeVisible();
+  await page.selectOption('[data-testid="schedule-recipient-select"]', 'qubit');
+  await page.fill('[data-testid="schedule-amount-input"]', '5.00');
+  await page.click('[data-testid="schedule-type-recurring"]');
+  await page.selectOption('[data-testid="schedule-interval-select"]', '60');
+  await page.fill('[data-testid="schedule-memo-input"]', 'Recurring node upkeep to Qubit');
+  await page.click('[data-testid="submit-create-schedule-button"]');
+  await expect(page.locator('[data-testid="create-schedule-form"]')).not.toBeVisible({ timeout: 10000 });
+
+  const schedule2Card = page.locator('[data-testid^="schedule-card-"]', {
+    hasText: 'Recurring node upkeep to Qubit',
+  });
+  await expect(schedule2Card).toBeVisible({ timeout: 10000 });
+  await expect(schedule2Card).toContainText(/active/i);
+
+  // Cancel schedule 2
+  await schedule2Card.locator('[data-testid^="cancel-schedule-button-"]').click();
+  await expect(page.locator('[data-testid="cancel-schedule-modal"]')).toBeVisible();
+  await page.click('[data-testid="confirm-cancel-schedule-button"]');
+  await expect(page.locator('[data-testid="cancel-schedule-modal"]')).not.toBeVisible();
+
+  // Confirm status is now CANCELLED
+  await expect(schedule2Card).toContainText(/cancelled/i);
+
+  // Seal Block 3 to verify cancelled schedule never pays
+  console.log('[E2E Step Helper] Sealing Block 3 to verify cancelled schedule is never paid');
+  const sealedBlock3 = miner.sealBlock({
+    validators: [
+      { id: 'cooper', privateKeyPem: cooperKeyRow.private_key },
+      { id: 'qubit', privateKeyPem: qubitKeyRow.private_key },
+    ],
+  });
+  console.log(`[E2E Helper] Sealed Block 3 at height ${sealedBlock3?.height}`);
+
+  await page.click('[data-testid="refresh-schedules-button"]');
+  await expect(schedule2Card).toContainText(/cancelled/i);
+  await expect(schedule2Card).toContainText('0 executions');
 
   console.log('[E2E Success] All views inspected, interactions verified, and screenshots captured.');
 });

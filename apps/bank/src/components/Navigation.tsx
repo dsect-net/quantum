@@ -1,6 +1,6 @@
 import React from 'react';
 import { BankView } from '../types.js';
-import { Landmark, ReceiptText, ArrowLeftRight, Banknote, PieChart } from 'lucide-react';
+import { Landmark, ReceiptText, ArrowLeftRight, Banknote, PieChart, CalendarClock } from 'lucide-react';
 
 interface NavigationProps {
   currentView: BankView;
@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'accounts', label: 'Accounts', icon: Landmark },
   { id: 'activity', label: 'Activity', icon: ReceiptText },
   { id: 'move-money', label: 'Move Money', icon: ArrowLeftRight },
+  { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
   { id: 'income', label: 'Paychecks', icon: Banknote },
   { id: 'economy', label: 'Economy', icon: PieChart },
 ];
@@ -52,9 +53,9 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, onSelectVie
       {/* Mobile Sticky Bottom Navigation (390x844 phone primary) */}
       <nav
         data-testid="mobile-navigation"
-        className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-neutral-200/90 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 px-2"
+        className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-neutral-200/90 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 px-1"
       >
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-6 gap-0.5">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;

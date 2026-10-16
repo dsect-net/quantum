@@ -8,6 +8,7 @@ import { ActivityView } from './views/ActivityView.js';
 import { MoveMoneyView } from './views/MoveMoneyView.js';
 import { IncomeView } from './views/IncomeView.js';
 import { EconomySnapshotView } from './views/EconomySnapshotView.js';
+import { ScheduledPaymentsView } from './views/ScheduledPaymentsView.js';
 
 const BankAppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<BankView>('accounts');
@@ -34,7 +35,8 @@ const BankAppContent: React.FC = () => {
 
         {currentView === 'accounts' && <AccountsView onNavigate={setCurrentView} />}
         {currentView === 'activity' && <ActivityView />}
-        {currentView === 'move-money' && <MoveMoneyView />}
+        {currentView === 'move-money' && <MoveMoneyView onNavigate={setCurrentView} />}
+        {currentView === 'scheduled' && <ScheduledPaymentsView />}
         {currentView === 'income' && <IncomeView />}
         {currentView === 'economy' && <EconomySnapshotView />}
       </main>
