@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { api, Item, List, ItemLinksResult } from '../api';
+import { formatDue, isDateOnly } from '../date';
+import { IconEdit, IconEye, IconTrash } from './Icons';
 
 interface ItemDetailProps {
   itemId: string;
@@ -135,7 +137,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
         type,
         status,
         priority: priority !== '' ? Number(priority) : null,
-        due_at: dueAt ? new Date(dueAt).toISOString() : null,
+        due_at: dueAt ? (isDateOnly(dueAt) ? dueAt : (dueAt.includes('T') ? new Date(dueAt).toISOString() : dueAt)) : null,
         tags,
         autosave: false, // Explicit deliberate save -> snapshot!
       });
@@ -143,7 +145,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
       // Refetch item with revisions
       const refreshed = await api.getItem(item.id, true);
       setItem(refreshed);
-      setSaveStatus('Saved snapshot');
+      setSaveStatus('Saved');
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (err: any) {
       setError(err?.message || 'Save failed');
@@ -253,7 +255,7 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
             className="btn btn-black btn-sm"
             onClick={handleExplicitSave}
           >
-            Save Snapshot
+            Save
           </button>
         </div>
       </div>
@@ -353,7 +355,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
               value={dueAt}
               onChange={(e) => {
                 setDueAt(e.target.value);
-                triggerAutosave({ due_at: e.target.value ? new Date(e.target.value).toISOString() : null });
+                const val = e.target.value;
+                const normalized = val ? (isDateOnly(val) ? val : (val.includes('T') ? new Date(val).toISOString() : val)) : null;
+                triggerAutosave({ due_at: normalized });
               }}
             />
           </div>
@@ -410,8 +414,17 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
               data-testid="toggle-edit-body-btn"
               className="btn btn-secondary btn-sm"
               onClick={() => setIsEditingBody(!isEditingBody)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              {isEditingBody ? '👁 Preview' : '✏️ Edit'}
+              {isEditingBody ? (
+                <>
+                  <IconEye size={14} /> Preview
+                </>
+              ) : (
+                <>
+                  <IconEdit size={14} /> Edit
+                </>
+              )}
             </button>
           </div>
 
@@ -460,6 +473,11 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
           <div>
             <strong>Updated:</strong> {formatNYTime(item.updated_at)}
           </div>
+          {item.due_at && (
+            <div>
+              <strong>Due:</strong> {formatDue(item.due_at)?.formatted}
+            </div>
+          )}
           {item.completed_at && (
             <div>
               <strong>Completed:</strong> {formatNYTime(item.completed_at)}
@@ -474,8 +492,9 @@ export const ItemDetail: React.FC<ItemDetailProps> = ({
             data-testid="delete-item-btn"
             className="btn btn-danger btn-sm"
             onClick={handleDelete}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            🗑 Delete Item
+            <IconTrash size={14} /> Delete Item
           </button>
         </div>
       </div>

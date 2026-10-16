@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, Item, List } from '../api';
+import { classifyDueBucket, formatDue, isDateOnly } from '../date';
 
 interface DueViewProps {
   lists: List[];
@@ -37,12 +38,7 @@ export const DueView: React.FC<DueViewProps> = ({
     }
   }, [lists]);
 
-  // Group into buckets
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const endOfToday = startOfToday + 24 * 60 * 60 * 1000;
-  const endOfWeek = startOfToday + 7 * 24 * 60 * 60 * 1000;
-
+  // Group into buckets using local calendar date classification
   const overdue: Item[] = [];
   const today: Item[] = [];
   const thisWeek: Item[] = [];
@@ -50,33 +46,32 @@ export const DueView: React.FC<DueViewProps> = ({
 
   for (const it of items) {
     if (!it.due_at) continue;
-    const dueTime = new Date(it.due_at).getTime();
-    if (dueTime < startOfToday) {
+    const bucket = classifyDueBucket(it.due_at);
+    if (bucket === 'overdue') {
       overdue.push(it);
-    } else if (dueTime < endOfToday) {
+    } else if (bucket === 'today') {
       today.push(it);
-    } else if (dueTime < endOfWeek) {
+    } else if (bucket === 'this_week') {
       thisWeek.push(it);
-    } else {
+    } else if (bucket === 'later') {
       later.push(it);
     }
   }
 
   // Sort each bucket by due_at ascending
-  const sortByDue = (a: Item, b: Item) => new Date(a.due_at!).getTime() - new Date(b.due_at!).getTime();
+  const getSortTime = (dueAt: string) => {
+    if (isDateOnly(dueAt)) {
+      const [y, m, d] = dueAt.split('-').map(Number);
+      return new Date(y, m - 1, d).getTime();
+    }
+    return new Date(dueAt).getTime();
+  };
+
+  const sortByDue = (a: Item, b: Item) => getSortTime(a.due_at!) - getSortTime(b.due_at!);
   overdue.sort(sortByDue);
   today.sort(sortByDue);
   thisWeek.sort(sortByDue);
   later.sort(sortByDue);
-
-  const formatDue = (dueAt: string) => {
-    return new Date(dueAt).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
 
   const renderSection = (title: string, sectionItems: Item[], testId: string, badgeClass?: string) => {
     return (
@@ -115,7 +110,7 @@ export const DueView: React.FC<DueViewProps> = ({
                 <div className="item-row-content">
                   <div className="item-row-title">{item.title}</div>
                   <div className="item-row-meta">
-                    <span className="badge">Due: {formatDue(item.due_at!)}</span>
+                    <span className="badge">Due: {formatDue(item.due_at)?.formatted}</span>
                     {item.priority && <span className="badge">P{item.priority}</span>}
                     <span className="badge">{item.type}</span>
                   </div>

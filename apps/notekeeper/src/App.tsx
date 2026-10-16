@@ -7,6 +7,13 @@ import { CaptureSheet } from './components/CaptureSheet';
 import { SearchView } from './components/SearchView';
 import { DueView } from './components/DueView';
 import { DeletedView } from './components/DeletedView';
+import {
+  IconAlert,
+  IconNotebook,
+  IconFolder,
+  IconCalendar,
+  IconSearch,
+} from './components/Icons';
 
 export type MainTab = 'lists' | 'due' | 'search';
 export type ActiveView = 'home' | 'list' | 'item' | 'deleted';
@@ -190,14 +197,14 @@ export const App: React.FC = () => {
         {/* Offline banner */}
         {isOffline && (
           <div className="offline-banner" data-testid="offline-banner">
-            <span>⚠️</span> You're offline — changes can't be saved right now.
+            <span style={{ display: 'inline-flex', alignItems: 'center' }}><IconAlert size={16} /></span> You're offline — changes can't be saved right now.
           </div>
         )}
 
         {/* Global header */}
         <header className="app-header">
           <div className="app-brand">
-            <span style={{ fontSize: '1.25rem' }}>📓</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center' }}><IconNotebook size={18} /></span>
             <span className="app-title">Notekeeper</span>
           </div>
 
@@ -299,7 +306,7 @@ export const App: React.FC = () => {
                 }
               }}
             >
-              <span style={{ fontSize: '1.125rem' }}>📁</span>
+              <IconFolder size={18} />
               <span>Lists</span>
             </button>
 
@@ -309,7 +316,7 @@ export const App: React.FC = () => {
               className={`nav-tab ${activeTab === 'due' ? 'active' : ''}`}
               onClick={() => setActiveTab('due')}
             >
-              <span style={{ fontSize: '1.125rem' }}>📅</span>
+              <IconCalendar size={18} />
               <span>Due</span>
             </button>
 
@@ -319,7 +326,7 @@ export const App: React.FC = () => {
               className={`nav-tab ${activeTab === 'search' ? 'active' : ''}`}
               onClick={() => setActiveTab('search')}
             >
-              <span style={{ fontSize: '1.125rem' }}>🔍</span>
+              <IconSearch size={18} />
               <span>Search</span>
             </button>
           </div>

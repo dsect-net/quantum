@@ -288,11 +288,20 @@ export class NoteKeeperService {
 
     let dueAt: string | null = null;
     if (input.due_at !== undefined && input.due_at !== null && input.due_at.trim() !== '') {
-      const parsed = Date.parse(input.due_at);
-      if (isNaN(parsed)) {
-        throw new Error(`Invalid due_at date format: ${input.due_at}`);
+      const trimmed = input.due_at.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const parsed = Date.parse(trimmed);
+        if (isNaN(parsed)) {
+          throw new Error(`Invalid due_at date format: ${input.due_at}`);
+        }
+        dueAt = trimmed;
+      } else {
+        const parsed = Date.parse(trimmed);
+        if (isNaN(parsed)) {
+          throw new Error(`Invalid due_at date format: ${input.due_at}`);
+        }
+        dueAt = new Date(parsed).toISOString();
       }
-      dueAt = new Date(parsed).toISOString();
     }
 
     const listTarget = input.list?.trim() || 'Ideas & Tasks';
@@ -428,11 +437,20 @@ export class NoteKeeperService {
       if (input.due_at === null || input.due_at.trim() === '') {
         dueAt = null;
       } else {
-        const parsed = Date.parse(input.due_at);
-        if (isNaN(parsed)) {
-          throw new Error(`Invalid due_at date format: ${input.due_at}`);
+        const trimmed = input.due_at.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+          const parsed = Date.parse(trimmed);
+          if (isNaN(parsed)) {
+            throw new Error(`Invalid due_at date format: ${input.due_at}`);
+          }
+          dueAt = trimmed;
+        } else {
+          const parsed = Date.parse(trimmed);
+          if (isNaN(parsed)) {
+            throw new Error(`Invalid due_at date format: ${input.due_at}`);
+          }
+          dueAt = new Date(parsed).toISOString();
         }
-        dueAt = new Date(parsed).toISOString();
       }
     }
 

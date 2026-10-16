@@ -94,6 +94,22 @@ test.beforeAll(async () => {
       author: 'scotty',
     }),
   });
+
+  // Fixture 5: Item due TODAY (date-only)
+  const now = new Date();
+  const todayDateOnly = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  await fetch(`${apiBase}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: 'Submit Daily Review Report',
+      type: 'task',
+      due_at: todayDateOnly,
+      priority: 2,
+      list: 'Ideas & Tasks',
+      author: 'scotty',
+    }),
+  });
 });
 
 test.afterAll(async () => {
@@ -203,11 +219,11 @@ test.describe('Quantum Notekeeper E2E Tests', () => {
     const titleInput = page.locator('[data-testid="item-title-input"]');
     await titleInput.fill('Updated Draft Document Title');
 
-    // Click Save Snapshot
+    // Click Save
     await page.click('[data-testid="item-explicit-save-btn"]');
 
     // Wait for save confirmation
-    await expect(page.locator('[data-testid="save-status"]')).toContainText('Saved snapshot');
+    await expect(page.locator('[data-testid="save-status"]')).toContainText('Saved');
 
     // Reload the page
     await page.reload();
@@ -243,5 +259,29 @@ test.describe('Quantum Notekeeper E2E Tests', () => {
     const overdueSection = page.locator('[data-testid="section-overdue"]');
     await expect(overdueSection).toBeVisible();
     await expect(overdueSection).toContainText('Overdue Project Audit');
+  });
+
+  test('7. date-only due date regression: item due today appears in Today (not Overdue) without time', async ({ page }) => {
+    await page.goto('/');
+
+    // Navigate to Due tab
+    await page.click('[data-testid="tab-due"]');
+    await expect(page.locator('[data-testid="due-view"]')).toBeVisible();
+
+    // Today section must be present and contain "Submit Daily Review Report"
+    const todaySection = page.locator('[data-testid="section-today"]');
+    await expect(todaySection).toBeVisible();
+    await expect(todaySection).toContainText('Submit Daily Review Report');
+
+    // Ensure it does NOT appear in Overdue section
+    const overdueSection = page.locator('[data-testid="section-overdue"]');
+    await expect(overdueSection.locator('text=Submit Daily Review Report')).toHaveCount(0);
+
+    // Verify the due badge renders as e.g. "Due: Oct 15" without time component
+    const todayItem = todaySection.locator('.item-row').filter({ hasText: 'Submit Daily Review Report' });
+    const dueBadge = todayItem.locator('.badge').filter({ hasText: 'Due:' });
+    await expect(dueBadge).toBeVisible();
+    const badgeText = await dueBadge.textContent();
+    expect(badgeText).toMatch(/^Due:\s+[A-Za-z]+\s+\d{1,2}$/);
   });
 });

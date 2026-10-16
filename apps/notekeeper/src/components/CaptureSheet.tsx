@@ -155,7 +155,7 @@ export const CaptureSheet: React.FC<CaptureSheetProps> = ({
               >
                 {lists.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.name} {l.private ? '🔒' : ''}
+                    {l.name} {l.private ? '(Private)' : ''}
                   </option>
                 ))}
               </select>

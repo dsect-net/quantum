@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Item, List } from '../api';
+import { formatDue } from '../date';
+import { IconDocument, IconLock } from './Icons';
 
 interface ListViewProps {
   list: List;
@@ -24,20 +26,6 @@ export const ListView: React.FC<ListViewProps> = ({
 
   const openItems = items.filter((it) => it.status !== 'done');
   const doneItems = items.filter((it) => it.status === 'done');
-
-  const formatDue = (dueAt: string | null) => {
-    if (!dueAt) return null;
-    const date = new Date(dueAt);
-    const now = new Date();
-    const isPast = date.getTime() < now.getTime();
-    const formatted = date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    return { formatted, isPast };
-  };
 
   const renderItemRow = (item: Item) => {
     const isCompleted = item.status === 'done';
@@ -74,10 +62,9 @@ export const ListView: React.FC<ListViewProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--text-dim)',
-              fontSize: '0.75rem',
             }}
           >
-            📝
+            <IconDocument size={16} />
           </div>
         )}
 
@@ -141,7 +128,11 @@ export const ListView: React.FC<ListViewProps> = ({
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <h1 style={{ fontSize: '1.375rem', fontWeight: 700 }}>{list.name}</h1>
-          {list.private === 1 && <span title="Private list">🔒</span>}
+          {list.private === 1 && (
+            <span title="Private list" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <IconLock size={16} />
+            </span>
+          )}
         </div>
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
           {openItems.length} open {openItems.length === 1 ? 'item' : 'items'}
@@ -184,7 +175,7 @@ export const ListView: React.FC<ListViewProps> = ({
                 style={{ width: '100%', justifyContent: 'space-between', marginBottom: '8px' }}
               >
                 <span>Done ({doneItems.length})</span>
-                <span>{showDone ? '▲ Hide' : '▼ Show'}</span>
+                <span>{showDone ? 'Hide' : 'Show'}</span>
               </button>
 
               {showDone && (

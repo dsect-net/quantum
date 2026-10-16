@@ -1,5 +1,6 @@
 import React from 'react';
 import { List } from '../api';
+import { IconLock, IconTrash } from './Icons';
 
 interface ListHomeProps {
   lists: List[];
@@ -68,8 +69,12 @@ export const ListHome: React.FC<ListHomeProps> = ({
                   <span style={{ fontSize: '1.0625rem', fontWeight: 600 }}>{list.name}</span>
                   {isInbox && <span className="badge badge-inbox">Inbox</span>}
                   {list.private === 1 && (
-                    <span title="Private list" style={{ fontSize: '0.9rem' }} data-testid="lock-glyph">
-                      🔒
+                    <span
+                      title="Private list"
+                      data-testid="lock-glyph"
+                      style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-muted)' }}
+                    >
+                      <IconLock size={14} />
                     </span>
                   )}
                 </div>
@@ -108,7 +113,7 @@ export const ListHome: React.FC<ListHomeProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
-              <span>🗑️</span>
+              <IconTrash size={16} />
               <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Deleted Items</span>
             </div>
             <span style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>Restore ›</span>
