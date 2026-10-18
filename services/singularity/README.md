@@ -7,7 +7,7 @@ files live under ignored `data/`; do not commit databases, credentials or upload
 ```sh
 npm ci
 SINGULARITY_DEMO=true npm start
-# http://localhost:8792/health
+# http://localhost:8795/health
 npm test
 npm run typecheck
 ```
