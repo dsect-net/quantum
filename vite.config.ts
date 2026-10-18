@@ -28,6 +28,8 @@ export default defineConfig({
     // Playwright specs (e2e/, apps/*/e2e/) are not vitest tests — sweeping
     // them in made every unit run report failed suites. They run via
     // `npm run test:e2e` (root) or each app's own Playwright config.
-    exclude: [...configDefaults.exclude, '**/e2e/**'],
+    // Singularity packages have their own aliases, runtimes and test configs.
+    // Run both explicitly with npm run test:singularity, not this jsdom suite.
+    exclude: [...configDefaults.exclude, '**/e2e/**', 'apps/universal-hub/**', 'services/singularity/**'],
   },
 });

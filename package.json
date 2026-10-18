@@ -13,7 +13,9 @@
     "cap:sync": "cap sync",
     "cap:add-android": "cap add android",
     "test:e2e": "playwright test",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "test:singularity": "npm test --prefix apps/universal-hub && npm test --prefix services/singularity",
+    "build:singularity": "npm run build --prefix apps/universal-hub && npm run typecheck --prefix services/singularity"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
