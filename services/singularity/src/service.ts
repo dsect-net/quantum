@@ -62,11 +62,15 @@ export class SingularityService {
   }
   publish(actorId: string, body: string, postId?: string) {
     this.actor(actorId);
-    const before = this.read();
-    const result = postId ? publishComment(before,actorId,postId,body) : publishPost(before,actorId,body);
-    if (result.error) throw new ServiceError(400,result.error);
+    // Read + compute + save all inside the immediate transaction: reading the
+    // snapshot before BEGIN IMMEDIATE let concurrent publishes overwrite
+    // each other (lost-update race, verification verdict Oct 18).
     this.db.exec('BEGIN IMMEDIATE');
+    let out: HubData['posts'][number] | HubData['comments'][number];
     try {
+      const before = this.read();
+      const result = postId ? publishComment(before,actorId,postId,body) : publishPost(before,actorId,body);
+      if (result.error) throw new ServiceError(400,result.error);
       if (!this.demo) {
         for (const task of result.data.tasks) {
           if (task.assigneeId && task.assigneeId !== before.tasks.find(t=>t.id===task.id)?.assigneeId)
@@ -76,8 +80,9 @@ export class SingularityService {
           this.db.prepare('INSERT INTO outbox(id,kind,payload) VALUES (?,?,?)').run(ping.id,'ping',JSON.stringify(ping));
       }
       this.save(result.data); this.db.exec('COMMIT');
+      out = postId ? result.data.comments.at(-1)! : result.data.posts[0];
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
-    return postId ? result.data.comments.at(-1)! : result.data.posts[0];
+    return out;
   }
   react(actorId:string, postId:string, kind:ReactionKind) {
     this.actor(actorId); const data=this.read();
@@ -98,14 +103,23 @@ export class SingularityService {
       // Unknown outcomes (timeout after the hub accepted a ping) are NOT auto-retried:
       // hub ping has no verified idempotency contract. Operator reconciles first.
       const rows=this.db.prepare("SELECT * FROM outbox WHERE status='pending' ORDER BY rowid").all() as unknown as Array<{id:string;kind:string;payload:string}>;
+      // A task ping must never be delivered when its assignment failed
+      // upstream (verdict Oct 18): track failed assigns (this pass + any
+      // already in needs-review) and hold their pings for review too.
+      const failedTasks=new Set<string>((this.db.prepare("SELECT payload FROM outbox WHERE kind='assign' AND status='needs-review'").all() as unknown as Array<{payload:string}>).map(r=>JSON.parse(r.payload).taskId as string));
+      const handleOf=(taskId:string)=>(this.db.prepare('SELECT handle FROM handles WHERE kind=? AND source=?').get('task',taskId) as {handle:string}|undefined)?.handle;
       for (const row of rows) {
+        const p=JSON.parse(row.payload);
+        if (row.kind!=='assign' && p.kind==='task' && p.ref && [...failedTasks].some(t=>t===p.ref||handleOf(t)===p.ref)) {
+          this.db.prepare("UPDATE outbox SET status='needs-review' WHERE id=?").run(row.id);
+          continue;
+        }
         this.db.prepare("UPDATE outbox SET status='sending' WHERE id=?").run(row.id);
         try {
-          const p=JSON.parse(row.payload);
           if (row.kind==='assign') await this.backend.assign(p.taskId,this.actor(p.actorId));
           else await this.backend.ping(p,this.read());
           this.db.prepare("UPDATE outbox SET status='sent' WHERE id=?").run(row.id);
-        } catch { this.db.prepare("UPDATE outbox SET status='needs-review' WHERE id=?").run(row.id); }
+        } catch { if (row.kind==='assign') failedTasks.add(p.taskId); this.db.prepare("UPDATE outbox SET status='needs-review' WHERE id=?").run(row.id); }
       }
     } finally {this.delivering=false;}
   }
