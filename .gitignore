@@ -27,3 +27,6 @@ dist-ssr
 test-results/
 playwright-report/
 playwright/.cache/
+
+# electron-builder output (desktop packages)
+release/

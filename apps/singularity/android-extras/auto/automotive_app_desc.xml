@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto descriptor: messaging template only (distraction-safe). -->
+<automotiveApp>
+  <uses name="notification" />
+</automotiveApp>

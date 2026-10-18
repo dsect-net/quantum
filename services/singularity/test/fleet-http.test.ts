@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import {createServer} from '../src/server.ts';
+import {createServer} from '../src/fleet/server.js';
 it('performs MCP initialize, list and call over actual HTTP',async()=>{
  const {app}=createServer({demo:true});const address=await app.listen({port:0,host:'127.0.0.1'});
  const client=new Client({name:'http-test',version:'1'});

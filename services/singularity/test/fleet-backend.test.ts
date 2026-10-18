@@ -1,5 +1,5 @@
 import {it,expect,vi,afterEach} from 'vitest';
-import {QuantumBackend} from '../src/backend.ts';
+import {QuantumBackend} from '../src/backend.js';
 import {seedData} from '../../../apps/universal-hub/src/singularity/seed.ts';
 afterEach(()=>vi.unstubAllGlobals());
 it('reads existing collab paths, retains IDs, and normalizes progress',async()=>{

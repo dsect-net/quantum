@@ -1,6 +1,6 @@
 /** Adapter to verified Quantum REST collab paths and existing agent-ping MCP.
  * No duplicate task/notification API. Worker key is server-only. */
-import type { Backend } from './service.ts';
+import type { Backend } from './fleet/service.js';
 import type { Actor, HubData } from '../../../apps/universal-hub/src/singularity/types.ts';
 
 export class QuantumBackend implements Backend {

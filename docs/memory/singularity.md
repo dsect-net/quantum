@@ -43,3 +43,13 @@ accessible icon controls and context panels derived from existing snapshot data.
 No new server endpoint, native support or live integration is implied. Filters
 and saved-state reload have browser coverage on phone and desktop. This remains
 on the same draft PR and fixed Arena branch.
+
+## Reconciliation note (2026-10-18, later)
+
+The social hub delivered on branch `arena/22bcb95e-quantum` landed in the same
+`services/singularity/` package: the fleet service above is now a faithful
+sidecar under `src/fleet/` (`/api/singularity/*` + `/mcp/fleet`), unchanged in
+contract, mounted beside the social surface (`/api/v1` + `/mcp`). Env names are
+split (`SINGULARITY_DB` = fleet, `DATABASE_PATH` = social) and the default port
+is 8795. Both suites pass together (65 tests). Merged-picture decisions:
+[`docs/MEMORY.md`](../MEMORY.md) (2026-10-18 reconciliation entry).
