@@ -91,7 +91,7 @@ export function RefCard({
     <button
       type="button"
       onClick={() => onOpen(ref.handle)}
-      className="block w-full rounded-card border border-line bg-surface px-3 py-3 text-left hover:border-ink"
+      className="reference-card block w-full rounded-card border border-line bg-surface px-3 py-3 text-left hover:border-ink"
     >
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-medium text-accent">#{ref.handle}</span>
@@ -100,7 +100,7 @@ export function RefCard({
       <p className="mt-1 text-sm font-medium text-ink">{ref.title}</p>
       {ref.kind === "goal" ? (
         <div className="mt-2">
-          <div className="h-1.5 overflow-hidden rounded-full bg-canvas">
+          <div className="h-1.5 overflow-hidden rounded-full bg-canvas" role="progressbar" aria-label="Goal completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0,Math.min(100,ref.progress))}>
             <div className="h-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, ref.progress))}%` }} />
           </div>
           <p className="mt-1 text-xs text-muted">

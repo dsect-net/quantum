@@ -2,6 +2,8 @@ import { useId, useMemo, useRef, useState } from "react";
 import type { Actor, HubData } from "@/singularity/types";
 import { parseTokens } from "@/singularity/parse";
 import { MentionChip } from "./cards";
+import { Avatar } from "./ui";
+import { Icon } from "./icon";
 
 type Suggestion = { label: string; insert: string; hint: string };
 
@@ -86,14 +88,23 @@ export function Composer({
     try {if (await onSubmit(text)) {setText("");setOpen(false);}}
     finally {setBusy(false);}
   }
+  function addToken(token:string) {
+    const before=text.slice(0,caret);const after=text.slice(caret);
+    const insert=(before&&!/\s$/.test(before)?' ':'')+token;
+    const next=before+insert+after;const pos=before.length+insert.length;
+    setText(next);setCaret(pos);setOpen(true);
+    requestAnimationFrame(()=>{ref.current?.focus();ref.current?.setSelectionRange(pos,pos);});
+  }
+  const author=actors.find(a=>a.id===data.session?.actorId);
   return (
     <form
-      className="rounded-card border border-line bg-surface p-3"
+      className={`composer-card ${submitLabel==='Post'?'is-post-composer':''}` }
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
+      {submitLabel==='Post'&&author?<div className="composer-identity"><Avatar actor={author} size="sm"/><span>Share an update<span> with your fleet</span></span><span className="composer-scope"><Icon name="people" size={12}/> Workspace</span></div>:null}
       <label className="sr-only" htmlFor={`composer-${id}`}>
         {placeholder}
       </label>
@@ -101,7 +112,7 @@ export function Composer({
         id={`composer-${id}`}
         ref={ref}
         value={text}
-        rows={3}
+        rows={2}
         maxLength={2000}
         disabled={busy}
         placeholder={placeholder}
@@ -154,7 +165,8 @@ export function Composer({
         </div>
       ) : null}
       {notes.length ? <p className="mb-2 text-xs leading-5 text-muted">{notes.join(" ")}</p> : null}
-      <div className="flex items-center justify-between gap-3">
+      <div className="composer-toolbar"><div className="composer-inserts"><button type="button" disabled={busy} onClick={()=>addToken('@')} title="Mention a person or agent" aria-label="Insert mention">@</button><button type="button" disabled={busy} onClick={()=>addToken('#')} title="Link a goal, task or memory" aria-label="Insert reference"><Icon name="link" size={16}/></button><span className="toolbar-divider"/>
+
         {seedText ? (
           <button
             type="button"
@@ -169,13 +181,14 @@ export function Composer({
         ) : (
           <span />
         )}
+        </div><div className="composer-submit"><span className={text.length>1900?'text-danger':'text-faint'} aria-label={`${text.length} of 2000 characters`}>{text.length ? `${text.length}/2000` : 'Ctrl + Enter'}</span>
         <button
           type="submit"
           disabled={busy || !text.trim()}
           className="h-11 rounded-xl bg-button px-4 text-sm font-medium text-button-ink disabled:opacity-40"
         >
-          {busy ? "Sending…" : submitLabel}
-        </button>
+          {busy ? "Sending…" : submitLabel}<Icon name="arrow" size={14}/>
+        </button></div>
       </div>
     </form>
   );

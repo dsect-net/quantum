@@ -33,3 +33,13 @@ write to Quantum Hive or Notion. No live memory API was available in this checko
 5. Keep draft #66 and this branch from being merged independently; files overlap.
 
 Architecture and safety rationale: [Singularity handoff](../singularity-universal-hub.md).
+
+## Modernization follow-up (2026-10-18)
+
+User requested a more modern, advanced and clean surface. Refined the light
+workspace instead of introducing a conflicting dark/gradient style. Added real
+client-side search, structural feed filters, per-actor device-local saved IDs,
+accessible icon controls and context panels derived from existing snapshot data.
+No new server endpoint, native support or live integration is implied. Filters
+and saved-state reload have browser coverage on phone and desktop. This remains
+on the same draft PR and fixed Arena branch.

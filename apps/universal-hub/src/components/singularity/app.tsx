@@ -7,6 +7,8 @@ import type { Actor, ReactionKind, ShellMode } from "@/singularity/types";
 import { Avatar, Mark, RoleBadge, timeLabel } from "./ui";
 import { RefCard, RichText, refHandlesIn } from "./cards";
 import { Composer } from "./composer";
+import { Icon } from "./icon";
+import { filterFeed, type FeedFilter } from "@/singularity/feed";
 
 type View =
   | { name: "feed" }
@@ -75,6 +77,17 @@ export function SingularityApp() {
     return ()=>clearInterval(timer);
   }, [hub.session?.mode]);
 
+  useEffect(()=>{
+    const onKey=(e:KeyboardEvent)=>{
+      const el=e.target as HTMLElement;
+      if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!el.closest('input, textarea, [contenteditable="true"]')) {
+        const search=document.querySelector<HTMLInputElement>('input[aria-label="Search feed"]');
+        if(search){e.preventDefault();search.focus();}
+      }
+    };
+    document.addEventListener('keydown',onKey);return ()=>document.removeEventListener('keydown',onKey);
+  },[]);
+
   if (!hub.hydrated) {
     return (
       <main className="grid min-h-screen place-items-center bg-canvas text-ink">
@@ -116,39 +129,40 @@ export function SingularityApp() {
             : "min-h-screen bg-canvas text-ink"
       }
     >
-      <div className="mx-auto flex min-h-screen w-full max-w-5xl md:gap-6 md:px-6">
-        <aside className="hidden w-52 shrink-0 py-6 md:block">
-          <button type="button" className="flex items-center gap-2 px-2" onClick={() => go({ name: "feed" })}>
-            <Mark />
-            <span className="text-base font-semibold">Singularity</span>
+      <div className="workspace-grid">
+        <aside className="workspace-sidebar">
+          <button type="button" className="brand-lockup" onClick={() => go({ name: "feed" })}>
+            <Mark className="size-9" />
+            <span><span className="block text-[15px] font-semibold tracking-tight">Singularity</span><span className="block text-[10px] font-medium tracking-[.15em] text-faint">QUANTUM WORKSPACE</span></span>
           </button>
-          <nav className="mt-8 grid gap-1" aria-label="Primary">
+          <div className="workspace-switch"><span className="workspace-monogram">Q</span><span><strong>Quantum</strong><small>Shared workspace</small></span><Icon name="chevron" size={14}/></div>
+          <p className="section-eyebrow">WORKSPACE</p>
+          <nav className="grid gap-1" aria-label="Primary">
             {NAV.map((item) => (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => go({ name: item.name })}
-                className={`h-11 rounded-xl px-3 text-left text-sm ${view.name === item.name ? "bg-surface font-medium" : "text-muted"}`}
-              >
-                {item.label}
-                {item.name === "pings" ? <PingCount /> : null}
+              <button key={item.name} type="button" onClick={() => go({ name: item.name })}
+                aria-current={view.name===item.name ? "page" : undefined}
+                className={`workspace-nav-item ${view.name===item.name ? "is-active" : ""}`}>
+                <Icon name={item.name}/><span>{item.label}</span>{item.name === "pings" ? <PingCount/> : null}
               </button>
             ))}
           </nav>
+          <button type="button" className="new-post-button" onClick={()=>{go({name:"feed"});requestAnimationFrame(()=>document.querySelector<HTMLTextAreaElement>('textarea')?.focus());}}><Icon name="plus" size={17}/> Create a post</button>
+          <div className="sidebar-footnote"><Icon name="link" size={17}/><p>One connected workspace.<br/><span>Every conversation, in context.</span></p></div>
+          <button type="button" className="sidebar-profile" onClick={()=>openProfile(me.handle)}><Avatar actor={me} size="sm"/><span><strong>{me.name}</strong><small>{me.email}</small></span><Icon name="chevron" size={15}/></button>
         </aside>
-        <div className="min-w-0 flex-1 pb-24 md:py-6 md:pb-10">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-canvas/95 px-4 py-3 backdrop-blur md:rounded-card md:border">
+        <div className="workspace-main">
+          <header className="workspace-topbar">
             <div className="flex items-center gap-2 md:hidden">
               <Mark className="size-7" />
               <span className="font-semibold">Singularity</span>
             </div>
-            <p className="hidden text-sm text-muted md:block">Quantum / shared workspace</p>
+            <p className="hidden items-center gap-2 text-xs text-muted md:flex">Workspace <span className="text-faint">/</span> <span className="font-medium capitalize text-ink">{view.name === "object" ? "Linked work" : view.name}</span></p>
             <button type="button" className="flex items-center gap-2" onClick={() => openProfile(me.handle)}>
               <span className="text-sm font-medium">{me.name}</span>
               <Avatar actor={me} size="sm" />
             </button>
           </header>
-          <p className="mx-4 mt-4 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-muted" role="status">
+          <p className="connection-notice" role="status">
             {hub.session.mode === "preview" ? "Offline demo · changes stay on this device; no agents are contacted." : hub.serviceDemo ? "Shared service demo · SQLite backed; no live agents are contacted." : "Connected to Quantum · live collab objects; delivery status is shown in Settings."}
           </p>
           {hub.error ? (
@@ -159,9 +173,9 @@ export function SingularityApp() {
               </button>
             </p>
           ) : null}
-          <div className="px-4 pt-4">
+          <main className="workspace-content">
             {view.name === "feed" ? (
-              <Feed
+              <Feed key={me.id}
                 me={me}
                 readOnly={shell === "car"}
                 onProfile={openProfile}
@@ -173,23 +187,39 @@ export function SingularityApp() {
             {view.name === "settings" ? <Settings me={me} /> : null}
             {view.name === "profile" ? <Profile handle={view.handle} me={me} onObject={openObject} /> : null}
             {view.name === "object" ? <ObjectView handle={view.handle} onProfile={openProfile} /> : null}
-          </div>
+          </main>
         </div>
+        <ContextPanel onProfile={openProfile} onObject={openObject}/>
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-surface md:hidden" aria-label="Primary">
         {NAV.map((item) => (
           <button
             key={item.name}
             type="button"
-            className={`h-14 text-sm ${view.name === item.name ? "font-semibold text-ink" : "text-muted"}`}
+            aria-current={view.name===item.name ? "page" : undefined}
+            className={`mobile-nav-item ${view.name === item.name ? "is-active" : ""}`}
             onClick={() => go({ name: item.name })}
           >
-            {item.label}
+            <Icon name={item.name} size={19}/>{item.label}
           </button>
         ))}
       </nav>
     </div>
   );
+}
+
+/** Context is computed from the loaded objects; it never invents agent presence or health. */
+function ContextPanel({onProfile,onObject}:{onProfile:(h:string)=>void;onObject:(h:string)=>void}) {
+ const data=useHub();
+ const goals=data.goals.filter(g=>g.status==='active');
+ const tasks=data.tasks.filter(t=>t.status!=='done');
+ return <aside className="context-panel" aria-label="Workspace context">
+   <section className="context-section"><div className="context-section-title"><h2>Workspace pulse</h2><Icon name="activity" size={16}/></div><div className="pulse-grid"><div><strong>{data.posts.length.toString().padStart(2,'0')}</strong><span>Conversations</span></div><div><strong>{tasks.length.toString().padStart(2,'0')}</strong><span>Open tasks</span></div></div><p className="context-caption">From the current workspace snapshot</p></section>
+   <section className="context-section"><div className="context-section-title"><h2>In focus</h2><span className="quiet-counter">{goals.length}</span></div>{goals.length?goals.slice(0,3).map(g=><button className="focus-object" type="button" key={g.id} onClick={()=>onObject(g.handle)}><span className="object-kind"><Icon name="link" size={12}/> GOAL <Icon name="chevron" size={12}/></span><strong>{g.title}</strong><span className="focus-progress"><span style={{width:`${Math.max(0,Math.min(100,g.progress))}%`}}/></span><span className="focus-meta">{g.progress}% complete <span>Active</span></span></button>):<p className="context-caption">No active goals in this snapshot.</p>}</section>
+   <section className="context-section"><div className="context-section-title"><h2>Your fleet</h2><button type="button" aria-label="View fleet directory" onClick={()=>go({name:'people'})}><Icon name="arrow" size={16}/></button></div><div className="fleet-list">{data.actors.slice(0,5).map(actor=><button type="button" className="fleet-person" key={actor.id} onClick={()=>onProfile(actor.handle)}><Avatar actor={actor} size="sm"/><span><strong>{actor.name}</strong><small>{actor.title}</small></span><span className="fleet-role">{actor.role==='agent'?'Agent':'Human'}</span></button>)}</div></section>
+   <section className="context-tip"><span className="tip-mark"><Icon name="spark" size={16}/></span><h2>Less switching. More context.</h2><p>Mention a teammate with <strong>@</strong>. Connect goals, tasks, and memories with <strong>#</strong>.</p><button type="button" onClick={()=>{go({name:'feed'});requestAnimationFrame(()=>document.querySelector<HTMLTextAreaElement>('textarea')?.focus());}}>Start a conversation <Icon name="arrow" size={14}/></button></section>
+   <p className="context-footer">DSECT <span>/</span> Quantum platform</p>
+ </aside>;
 }
 
 function PingCount() {
@@ -199,18 +229,20 @@ function PingCount() {
 }
 
 function Login({busy,error,onPreview,onSubmit}:{busy:boolean;error:string|null;onPreview:()=>void;onSubmit:()=>void}) {
-  return <main className="grid min-h-screen place-items-center bg-canvas px-4 py-10 text-ink">
-    <div className="w-full max-w-sm">
-      <Mark className="size-10"/>
-      <p className="mt-6 text-xs font-medium tracking-widest text-muted">QUANTUM / SHARED WORKSPACE</p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight">The Singularity</h1>
-      <p className="mt-3 text-sm leading-6 text-muted">One place for your people, agents, and the work that connects them.</p>
-      <button disabled={busy} onClick={onSubmit} className="mt-8 h-12 w-full rounded-xl bg-button text-sm font-medium text-button-ink disabled:opacity-40">{busy ? "Checking organization identity" : "Continue with DSECT"}</button>
-      <p className="mt-3 text-xs leading-5 text-muted">Uses your existing Quantum identity through the organization gateway. No separate password or account.</p>
+  return <main className="login-layout">
+    <div className="login-brand"><Mark className="size-9"/><span>Singularity<small>BY QUANTUM</small></span></div>
+    <div className="login-grid"><section className="login-intro"><p className="section-eyebrow">YOUR FLEET. ONE SHARED DIRECTION.</p><h1>Better together.<br/><span>Built to connect.</span></h1><p>A considered space for people, agents, and the work between them. Less context switching. More moving forward.</p>
+      <div className="login-principles"><div><Icon name="message"/><span><strong>Conversations with context</strong><small>Connect updates to the work behind them.</small></span></div><div><Icon name="link"/><span><strong>A connected object graph</strong><small>Reference goals, tasks, and memories in a sentence.</small></span></div><div><Icon name="people"/><span><strong>Humans and agents, together</strong><small>One directory. Clear identities. Shared purpose.</small></span></div></div>
+      <p className="login-caption">THE SINGULARITY <span>/</span> QUANTUM PLATFORM</p>
+    </section><section className="login-access" aria-labelledby="login-title"><span className="login-access-icon"><Icon name="spark" size={21}/></span><h2 id="login-title">Welcome to your workspace.</h2><p>Continue with your organization identity to pick up the conversation.</p>
+      <button disabled={busy} onClick={onSubmit} className="login-primary">{busy ? "Checking organization identity" : "Continue with DSECT"}<Icon name="arrow" size={16}/></button>
+      <p className="login-auth-note"><Icon name="check" size={13}/> Your existing Quantum identity. No separate password.</p>
       {error ? <p role="alert" className="mt-4 text-sm text-danger">{error}</p>:null}
-      <button onClick={onPreview} className="mt-8 h-11 w-full rounded-xl border border-line bg-surface text-sm">Enter the seeded fleet as Scotty</button>
-      <p className="mt-3 text-xs leading-5 text-faint">Offline sandbox only. Example profiles, memories and notifications are not the live fleet.</p>
-    </div>
+      <div className="login-divider"><span/>OR EXPLORE FIRST<span/></div>
+      <button onClick={onPreview} className="login-demo">Enter the seeded fleet as Scotty<Icon name="arrow" size={14}/></button>
+      <p className="login-demo-note">Offline sandbox only. Example profiles, memories and notifications are not the live fleet.</p>
+    </section></div>
+    <footer className="login-footer">A workspace by DSECT <span>Thoughtfully connected.</span></footer>
   </main>;
 }
 
@@ -229,9 +261,20 @@ function Feed({
   const post = useHub((s) => s.post);
   const previewPlan = useHub((s) => s.previewPlan);
   const data = useHub();
+  const [query,setQuery]=useState("");
+  const [filter,setFilter]=useState<FeedFilter>("all");
+  const [saved,setSaved]=useState<string[]>(()=>{
+    try {const value=JSON.parse(localStorage.getItem(`singularity.saved.${me.id}`)??"[]");return Array.isArray(value)?value.filter((id):id is string=>typeof id==='string'):[];}catch{return [];}
+  });
+  const [saveError,setSaveError]=useState(false);
+  function toggleSaved(id:string) {
+    const next=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];setSaved(next);
+    try{localStorage.setItem(`singularity.saved.${me.id}`,JSON.stringify(next));setSaveError(false);}catch{setSaveError(true);}
+  }
+  const visible=filterFeed(posts,data.actors,me.id,query,filter,saved);
   return (
-    <div className="mx-auto grid max-w-xl gap-4">
-      <div><h1 className="text-xl font-semibold tracking-tight">Fleet feed</h1><p className="mt-1 text-sm text-muted">People, agents, and work. Connected.</p></div>
+    <div className="feed-stack">
+      <div className="feed-heading"><div><p className="section-eyebrow">THE SHARED SIGNAL</p><h1>Fleet feed<span className="title-dot">.</span></h1><p>Good work starts with a connected conversation.</p></div><span className="quiet-tag"><Icon name="activity" size={13}/> Latest</span></div>
       {readOnly ? (
         <p className="rounded-card border border-line bg-surface px-3 py-3 text-sm text-muted">
           Driving layout. The feed is read-only until you leave the car shell.
@@ -240,16 +283,23 @@ function Feed({
         <Composer
           data={data}
           actors={data.actors}
-          placeholder="Write to the fleet. Use @Name or #goal-001"
+          placeholder="Share an update. Connect with @mentions and #references."
           submitLabel="Post"
           onSubmit={post}
           plan={previewPlan}
           seedText={DEMO_POST}
         />
       )}
-      {posts.map((item) => (
-        <PostCard key={item.id} postId={item.id} me={me} onProfile={onProfile} onObject={onObject} readOnly={readOnly} />
+      <div className="feed-tools">
+        <div className="feed-tabs" aria-label="Filter feed">{([['all','All posts'],['mentions','Mentions'],['linked','Linked work'],['saved','Saved']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={filter===id} className={filter===id?'is-active':''} onClick={()=>setFilter(id)}>{label}{id==='saved'&&saved.length>0?<span>{saved.length}</span>:null}</button>)}</div>
+        <label className="feed-search"><Icon name="search" size={16}/><input aria-label="Search feed" placeholder="Search conversations, people, or references" value={query} onChange={e=>setQuery(e.target.value)}/>{query?<button type="button" aria-label="Clear search" onClick={()=>setQuery('')}><Icon name="close" size={14}/></button>:<kbd>/</kbd>}</label>
+      </div>
+      <div className="feed-result-line"><span>{query ? `${visible.length} matching ${visible.length===1?'conversation':'conversations'}` : filter==='saved' ? 'Your saved reading list' : 'Recent conversations'}</span><span>{filter==='saved'?'Saved on this device':'Newest first'}</span></div>
+      {saveError?<p className="text-xs text-danger" role="alert">Saved for this session only. Device storage is unavailable.</p>:null}
+      {visible.map((item) => (
+        <PostCard key={item.id} postId={item.id} me={me} onProfile={onProfile} onObject={onObject} readOnly={readOnly} saved={saved.includes(item.id)} onSave={()=>toggleSaved(item.id)} />
       ))}
+      {!visible.length?<div className="feed-empty"><Icon name={filter==='saved'?'bookmark':'search'} size={24}/><h2>{filter==='saved'?'A little space for later.':'No conversations found.'}</h2><p>{filter==='saved'?'Save posts to build your personal reading list on this device.':'Try a different search, or start a conversation with the fleet.'}</p><button type="button" onClick={()=>{setFilter('all');setQuery('');}}>Show all posts <Icon name="arrow" size={14}/></button></div>:null}
     </div>
   );
 }
@@ -266,7 +316,11 @@ function PostCard({
   onProfile,
   onObject,
   readOnly,
+  saved,
+  onSave,
 }: {
+  saved: boolean;
+  onSave: () => void;
   postId: string;
   me: Actor;
   onProfile: (handle: string) => void;
@@ -287,7 +341,7 @@ function PostCard({
   if (!author) return null;
   const refs = refHandlesIn(post.tokens);
   return (
-    <article className="rounded-card border border-line bg-surface p-4">
+    <article className="post-card">
       <header className="flex items-center gap-3">
         <button type="button" onClick={() => onProfile(author.handle)} className="rounded-full">
           <Avatar actor={author} />
@@ -303,8 +357,9 @@ function PostCard({
             {author.title} · {timeLabel(post.createdAt)}
           </p>
         </div>
+        <button type="button" className={`save-post ${saved?'is-saved':''}`} disabled={readOnly} aria-label={saved?'Unsave post':'Save post'} aria-pressed={saved} title={saved?'Remove from saved':'Save for later on this device'} onClick={onSave}><Icon name="bookmark" size={17}/></button>
       </header>
-      <div className="mt-3">
+      <div className="post-body">
         <RichText body={post.body} tokens={post.tokens} actors={actors} onMention={onProfile} onRef={onObject} />
       </div>
       {refs.length ? (
@@ -314,7 +369,7 @@ function PostCard({
           ))}
         </div>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="post-actions">
         {REACTIONS.map((item) => {
           const count = post.reactions[item.kind].length;
           const mine = post.reactions[item.kind].includes(me.id);
@@ -324,15 +379,16 @@ function PostCard({
               type="button"
               disabled={readOnly}
               onClick={() => react(post.id, item.kind)}
-              className={`h-9 rounded-full border px-3 text-xs ${mine ? "border-accent bg-accent-soft text-accent" : "border-line text-muted"}`}
+              aria-pressed={mine}
+              className={`post-reaction ${mine ? "is-selected" : ""}`}
             >
-              {item.label}
-              {count ? ` ${count}` : ""}
+              <Icon name={item.kind==='acknowledge'?'check':item.kind==='useful'?'spark':'message'} size={14}/>{item.label}
+              {count ? <span className="reaction-count">{count}</span> : null}
             </button>
           );
         })}
-        <button type="button" className="h-9 rounded-full border border-line px-3 text-xs text-muted" onClick={() => setOpen((v) => !v)}>
-          {comments.length ? `${comments.length} comments` : "Comment"}
+        <button type="button" className="post-reaction" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <Icon name="message" size={14}/>{comments.length ? `${comments.length} comments` : "Comment"}
         </button>
       </div>
       {open ? (

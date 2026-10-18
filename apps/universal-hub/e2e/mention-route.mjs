@@ -36,6 +36,25 @@ try {
   await card.getByRole('button',{name:'Reply',exact:true}).click();
   await card.getByText('Reference this',{exact:false}).waitFor();
   await card.getByRole('button',{name:/^Useful/}).click();
+  // New workspace controls: search, structural filters, saved reading list.
+  await card.getByRole('button',{name:'Save post',exact:true}).click();
+  await page.getByRole('button',{name:/^Saved/}).click();
+  assert.equal(await page.locator('article').count(),1);
+  assert.equal(await page.getByRole('button',{name:'Unsave post',exact:true}).count(),1);
+  await page.getByRole('button',{name:'Mentions',exact:true}).click();
+  await page.getByRole('heading',{name:'No conversations found.'}).waitFor();
+  await page.getByRole('button',{name:'Linked work',exact:true}).click();
+  await page.getByRole('textbox',{name:'Search feed'}).fill('does-not-exist-anywhere');
+  await page.getByRole('heading',{name:'No conversations found.'}).waitFor();
+  await page.getByRole('button',{name:'Clear search'}).click();
+  await page.getByRole('button',{name:'All posts',exact:true}).click();
+  await page.getByRole('textbox',{name:'Search feed'}).fill('scotty');
+  assert(await page.locator('article').count()>0);
+  await page.getByRole('button',{name:'Clear search'}).click();
+  await page.getByRole('textbox',{name:'Search feed'}).blur();
+  await page.keyboard.press('/');
+  assert.equal(await page.getByRole('textbox',{name:'Search feed'}).evaluate(el=>el===document.activeElement),true);
+  await page.screenshot({path:new URL(`verified-search-${device}.png`,out).pathname});
   await page.evaluate(()=>location.hash='#/pings');
   await page.getByText('Iris · task').first().waitFor();
   await page.screenshot({path:new URL(`verified-pings-${device}.png`,out).pathname});
@@ -57,6 +76,24 @@ try {
   await page.getByRole('textbox',{name:'Bio',exact:true}).waitFor();
   assert.equal(await page.getByRole('textbox',{name:'Bio',exact:true}).inputValue(),'E2E verified shared Quantum profile');
   await page.screenshot({path:new URL(`verified-profile-${device}.png`,out).pathname});
+  await page.evaluate(()=>location.hash='#/');
+  await page.getByRole('button',{name:/^Saved/}).click();
+  assert.equal(await page.locator('article').count(),1);
+  await page.screenshot({path:new URL(`verified-saved-${device}.png`,out).pathname});
+  await page.getByRole('button',{name:'Unsave post',exact:true}).click();
+  await page.getByRole('heading',{name:'A little space for later.'}).waitFor();
+  await page.getByRole('button',{name:'All posts',exact:true}).click();
+  await page.getByRole('button',{name:'Insert mention',exact:true}).first().click();
+  await page.getByRole('list',{name:'Mention and reference suggestions'}).waitFor();
+  await page.getByRole('list',{name:'Mention and reference suggestions'}).getByRole('button',{name:/Cooper/}).click();
+  assert((await page.locator('textarea').first().inputValue()).includes('@Cooper'));
+  await page.locator('textarea').first().fill('');
+  if(device==='desktop') {
+    await page.getByRole('button',{name:'Create a post',exact:true}).click();
+    assert.equal(await page.locator('textarea').first().evaluate(el=>el===document.activeElement),true);
+    await page.getByRole('button',{name:'View fleet directory'}).click();
+    await page.getByRole('heading',{name:'Directory',exact:true}).waitFor();
+  }
   await page.evaluate(()=>location.hash='#/settings');
   await page.getByRole('switch').check();await page.getByRole('button',{name:'Run self-checks'}).click();
   assert.equal(await page.getByText(/^Fail ·/).count(),0);

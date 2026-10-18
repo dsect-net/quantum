@@ -4,7 +4,7 @@ Run from the monorepo on `arena/b91bee0a-quantum`. No production deployment.
 
 | Check | Result |
 |---|---|
-| App Vitest parser/handle/routing/renderer/domain tests | 15 passed |
+| App Vitest parser/handle/routing/renderer/domain/feed-filter tests | 17 passed |
 | Service Vitest persistence/auth/REST/MCP/HTTP/backend contracts | 11 passed |
 | App strict TypeScript + production/PWA build | Passed |
 | Service strict TypeScript | Passed |
@@ -42,3 +42,19 @@ browser binary, build bundle, database or test dependency cache is committed.
 Repeat commands and setup: [app README](../apps/universal-hub/README.md),
 [service README](../services/singularity/README.md). Known integration/security
 and platform gates: [handoff](singularity-universal-hub.md).
+
+## Workspace modernization follow-up
+
+Updated the light corporate UI with icon-led navigation, a desktop context rail,
+a new access screen, responsive composer toolbar and quieter reference cards.
+Context counts are calculated from the loaded snapshot, not fabricated presence.
+Search matches loaded post text, author names/handles and reference handles;
+Mentions and Linked work filters inspect structured tokens. Saved posts store
+only IDs per actor on the current device; no server sync or cached private body.
+Storage errors are explicitly session-only. The `/` keyboard shortcut focuses
+feed search without interrupting an existing edit.
+
+Expanded both viewport E2E flows: search/no-result/reset, structural filters,
+save/reload/unsave, mention insertion, keyboard focus and desktop contextual
+navigation. Added `verified-search-*` and `verified-saved-*` screenshots. Re-ran
+all 28 app/service tests, production build/typechecks and both browser flows.

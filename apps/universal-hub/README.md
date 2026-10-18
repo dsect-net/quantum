@@ -50,3 +50,13 @@ PWA is the current downloadable app, **not native signed binaries**. Capacitor
 config is preparatory only. TV/Wear OS/Auto layout experiments in Developer mode
 are not platform support. See the [architecture and platform matrix](../../docs/singularity-universal-hub.md)
 and [development memory](../../docs/memory/singularity.md) before extending.
+
+## Workspace controls
+
+- Search loaded conversations by text, author or object handle; `/` focuses search.
+- All posts / Mentions / Linked work / Saved are real feed filters.
+- Bookmark posts for a reading list stored **on this device**, scoped by actor ID.
+  Only IDs are persisted, not authenticated post bodies. No server sync is implied.
+- Composer @ and link buttons insert tokens and open suggestions; Ctrl/Cmd+Enter
+  submits. Desktop context cards open the actual loaded object/profile.
+- Counts are snapshot-derived, not live presence or fabricated agent telemetry.
