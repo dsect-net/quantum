@@ -12,7 +12,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createServer, type ServerInstance } from '../src/server.js';
 
-function firstText(result: { content?: { type?: string; text?: string }[] }): unknown {
+function firstText(raw: unknown): unknown {
+  const result = raw as { content?: { type?: string; text?: string }[] };
   const text = result.content?.find((c) => c.type === 'text')?.text ?? '{}';
   return JSON.parse(text);
 }

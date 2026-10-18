@@ -16,8 +16,8 @@ export default defineConfig({
     // Dev convenience: proxy API + MCP to the local service so the browser
     // app runs same-origin (no CORS, no mixed origins in dev).
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8792', changeOrigin: true },
-      '/health': { target: 'http://127.0.0.1:8792', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:8795', changeOrigin: true },
+      '/health': { target: 'http://127.0.0.1:8795', changeOrigin: true },
     },
   },
   build: {

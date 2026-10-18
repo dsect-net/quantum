@@ -13,7 +13,8 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { createServer, type ServerInstance } from '../src/server.js';
 import { MCP_TOOL_NAMES } from '../src/rest.js';
 
-function firstText(result: { content?: { type?: string; text?: string }[]; isError?: boolean }): unknown {
+function firstText(raw: unknown): unknown {
+  const result = raw as { content?: { type?: string; text?: string }[]; isError?: boolean };
   const text = result.content?.find((c) => c.type === 'text')?.text ?? '{}';
   return JSON.parse(text);
 }

@@ -21,10 +21,10 @@ function fail(msg) {
 
 async function main() {
   const server = spawn(
-    process.execPath,
-    [path.join(__dirname, '..', 'dist', 'server.js')],
+    path.join(__dirname, '..', 'node_modules', '.bin', 'tsx'),
+    [path.join(__dirname, '..', 'src', 'server.ts')],
     {
-      env: { ...process.env, SINGULARITY_DB: dbPath, PORT: String(PORT), HOST: '127.0.0.1' },
+      env: { ...process.env, DATABASE_PATH: dbPath, PORT: String(PORT), HOST: '127.0.0.1' },
       stdio: ['ignore', 'pipe', 'inherit'],
     },
   );
@@ -128,6 +128,18 @@ async function main() {
   }
 
   server.kill('SIGTERM');
+  // Wait for graceful shutdown while stdout is still piped — exiting early
+  // closes the pipe mid-write and the child dies with a noisy EPIPE.
+  await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      server.kill('SIGKILL');
+      resolve(null);
+    }, 3000);
+    server.on('exit', () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+  });
   for (const ext of ['', '-wal', '-shm']) {
     const f = `${dbPath}${ext}`;
     if (fs.existsSync(f)) fs.rmSync(f, { force: true });

@@ -17,7 +17,7 @@ export const SCHEMA_VERSION = 1;
  * Parent directories are created automatically.
  */
 export function openDatabase(dbPath?: string): Database.Database {
-  const resolved = dbPath ?? process.env.SINGULARITY_DB ?? './data/singularity.db';
+  const resolved = dbPath ?? process.env.DATABASE_PATH ?? './data/singularity.sqlite';
 
   if (resolved !== ':memory:') {
     const dir = path.dirname(resolved);

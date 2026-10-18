@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * E2E for The Singularity — phone viewport (390×844) against a production
- * build served by `vite preview`, with the real service on :8792 behind the
+ * build served by `vite preview`, with the real service on :8795 behind the
  * Vite dev proxy pattern (here the spec points the app at the service URL
  * through the login screen's service-URL field).
  *

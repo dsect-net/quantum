@@ -1,12 +1,12 @@
 /**
  * App-shell smoke — The Singularity. Runs against a production build at the
- * phone viewport. The service (services/singularity on :8792) must be up
+ * phone viewport. The service (services/singularity on :8795) must be up
  * with seed data for the signed-in flow; the login gate and demo states are
  * verified regardless.
  */
 import { expect, test } from '@playwright/test';
 
-const SERVICE_URL = process.env.SINGULARITY_SERVICE_URL ?? 'http://127.0.0.1:8792';
+const SERVICE_URL = process.env.SINGULARITY_SERVICE_URL ?? 'http://127.0.0.1:8795';
 
 test.describe('The Singularity — app shell', () => {
   test('login gate renders with service URL field and DSECT identity fields', async ({ page }) => {

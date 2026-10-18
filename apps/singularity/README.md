@@ -18,11 +18,11 @@ Root architecture doc: [`THE-SINGULARITY.md`](../../THE-SINGULARITY.md).
 
 ```bash
 # 1. Service (terminal A)
-cd ../../services/singularity && npm install && npm run dev      # :8792
+cd ../../services/singularity && npm install && npm run dev      # :8795
 
 # 2. App (terminal B)
 cd apps/singularity && npm install
-npm run dev                                                      # :5183 (proxies /api → :8792)
+npm run dev                                                      # :5183 (proxies /api → :8795)
 ```
 
 Sign in with your DSECT organization credentials (seeded owner:

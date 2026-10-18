@@ -92,3 +92,27 @@ Windows NSIS, Linux AppImage/deb, macOS dmg), Android (Capacitor), iOS/macOS
 their own entry constraints (leanback, watch faces/complications, automotive
 distraction templates) — `docs/SINGULARITY-PLATFORMS.md` documents exactly what
 is real vs. scaffolded. Never claim a platform works before its build is green.
+
+### 2026-10-18 — Reconciliation with the universal-hub fleet feed (merge with main)
+A parallel session landed `apps/universal-hub/` + an earlier `services/singularity/`
+(fleet feed, ping/assignment routing, fail-closed gateway identity) via PR #78 —
+same product name, different brief. Reconciled as **one service, two surfaces**:
+- `services/singularity/` hosts the social hub (`/api/v1`, `/mcp`, 22
+  `singularity_*` tools, explicit `actor` args — notekeeper convention) **and**
+  the fleet feed (`/api/singularity/*`, `/mcp/fleet`, 11 fleet tools,
+  transport-bound identity — never a tool argument), the latter a faithful port
+  in `src/fleet/` so `apps/universal-hub` is unchanged. Both test suites pass
+  together (65 tests).
+- Env contract is split to avoid collision: `DATABASE_PATH` = social store;
+  `SINGULARITY_DB` = fleet store. Service default port is **8795** (the
+  universal-hub ingress contract). Runtime is `tsx` (the fleet code imports
+  shared modules from `apps/universal-hub/src/singularity/` with `.ts`
+  extensions); `npm run typecheck` replaces `npm run build`.
+- Fleet surface mounts only with `SINGULARITY_DEMO=true` or full live env
+  (directory + proxy secret + Quantum hub). Fail-closed otherwise — never a
+  silent demo. See `docs/memory/singularity.md` (fleet-side memory) and
+  `docs/singularity-universal-hub.md`.
+- Tool catalogs stay separate on purpose: `/mcp` = social 22, `/mcp/fleet` =
+  fleet 11. `src/gateway.ts` federates either endpoint and injects the
+  authenticated principal as `actor` for social tools (transport-bound
+  identity in the gateway context).
