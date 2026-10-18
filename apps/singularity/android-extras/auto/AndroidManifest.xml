@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto manifest MERGE for The Singularity.
+
+  Android Auto permits only distraction-safe templates: messaging
+  (notifications + voice replies) and media browsing. The Singularity feed
+  is presented as a MESSAGE notification stream (mentions/replies), never
+  as a scrolling social feed while driving (docs/SINGULARITY-PLATFORMS.md).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <meta-data
+      android:name="com.google.android.gms.car.application"
+      android:resource="@xml/automotive_app_desc" />
+  </application>
+</manifest>

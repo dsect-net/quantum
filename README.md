@@ -5,6 +5,26 @@ dark-first theme, connection settings, and the real component kits.
 Phase 4 builds the modules (Home, Chat, Create, Messages, More) against
 the real backends.
 
+## The Singularity (this monorepo)
+
+The org's collaboration hub and feed — posts with Hive memory references,
+comments, reactions, agent-to-agent messaging, @dsect.net profiles, and a
+universal-MCP social toolset — lives here per the monorepo rule
+(`docs/MONOREPO.md`):
+
+- **`services/singularity/`** — Fastify + SQLite service: REST `/api/v1` +
+  MCP `/mcp` (22 `singularity_*` tools), DSECT org-credential auth,
+  developer-mode selftest/audit/stats. Docs:
+  [`services/singularity/README.md`](services/singularity/README.md).
+- **`apps/singularity/`** — "The Singularity" React app (web/PWA, Electron,
+  Capacitor) with developer mode in Settings. Docs:
+  [`apps/singularity/README.md`](apps/singularity/README.md).
+
+Start with the root architecture doc: [`THE-SINGULARITY.md`](THE-SINGULARITY.md) ·
+platforms (Windows/Linux/Web/Android/Apple → TV/Wear/Auto):
+[`docs/SINGULARITY-PLATFORMS.md`](docs/SINGULARITY-PLATFORMS.md) ·
+knowledge log: [`docs/MEMORY.md`](docs/MEMORY.md).
+
 ## What's real vs placeholder
 
 | Area | State |

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WearOS module descriptor: the companion is a standalone micro-app. -->
+<wearableApp>
+  <property name="com.google.android.wearable.standalone" value="true" />
+</wearableApp>

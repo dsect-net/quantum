@@ -1,0 +1,27 @@
+# electron-builder — The Singularity desktop packages.
+# Requires `npm run desktop:setup` first (electron + electron-builder).
+# Produces: Windows NSIS installer, Linux AppImage + deb, macOS dmg.
+appId: net.dsect.singularity
+productName: The Singularity
+directories:
+  output: release
+files:
+  - dist/**
+  - electron/**
+  - package.json
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Network
+  maintainer: DSECT <ops@dsect.net>
+win:
+  target:
+    - nsis
+mac:
+  target:
+    - dmg
+  category: public.app-category.social-networking
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

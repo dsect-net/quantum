@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WearOS companion manifest MERGE for The Singularity.
+
+  The watch companion is a WEAR micro-app: notifications + quick reactions
+  + voice replies (docs/SINGULARITY-PLATFORMS.md). The full feed stays on
+  the phone — wrist sessions are seconds long by design.
+
+  Handheld app declares the companion; the wear module declares itself.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-feature android:name="android.hardware.type.watch" />
+
+  <application>
+    <meta-data
+      android:name="com.google.android.wearable.standalone"
+      android:value="true" />
+    <!-- Companion linkage back to the handheld app -->
+    <meta-data
+      android:name="com.google.android.wearable.beta.app"
+      android:resource="@xml/wearable_app_desc" />
+  </application>
+</manifest>

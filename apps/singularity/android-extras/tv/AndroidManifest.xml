@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Google TV (Android TV) flavor manifest MERGE for The Singularity.
+
+  Merged into the Capacitor Android app's AndroidManifest for the `tv`
+  flavor (docs/SINGULARITY-PLATFORMS.md). Leanback launcher intent makes
+  the app a TV launcher entry; touchscreen is not required on TV.
+
+  Usage: build the `tv` product flavor of the generated android project:
+    ./gradlew assembleTvRelease
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-feature
+    android:name="android.software.leanback"
+    android:required="true" />
+  <uses-feature
+    android:name="android.hardware.touchscreen"
+    android:required="false" />
+
+  <application>
+    <activity
+      android:name=".MainActivity"
+      android:exported="true"
+      android:banner="@mipmap/ic_launcher"
+      android:screenOrientation="landscape">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
