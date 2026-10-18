@@ -27,7 +27,7 @@ export function createServer(options:Options={}) {
     if (req.url==='/health') return;
     // Same-origin browser writes only. No permissive CORS; proxy strips headers.
     const origin=req.headers.origin;
-    if (origin && new URL(origin).host!==req.headers.host) return reply.code(403).send({error:'Cross-origin request refused'});
+    if (origin) { let originHost:string|undefined; try { originHost=new URL(origin).host; } catch { return reply.code(403).send({error:'Cross-origin request refused'}); } if (originHost!==req.headers.host) return reply.code(403).send({error:'Cross-origin request refused'}); }
     if (demo) {identities.set(req,'actor-scotty');return;}
     const bearer=req.headers.authorization?.replace(/^Bearer /,'');
     let id:string|undefined;
@@ -64,6 +64,6 @@ if (process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
   const demo=process.env.SINGULARITY_DEMO==='true';
   const actors=process.env.SINGULARITY_DIRECTORY?directorySchema.parse(JSON.parse(readFileSync(process.env.SINGULARITY_DIRECTORY,'utf8'))):undefined;
   const {app}=createServer({demo,actors,dbPath:process.env.SINGULARITY_DB??'data/singularity.db',proxySecret:process.env.SINGULARITY_PROXY_SECRET,workers:JSON.parse(process.env.SINGULARITY_WORKERS??'{}'),backend:!demo?new QuantumBackend(process.env.QUANTUM_HUB_URL!,process.env.QUANTUM_MCP_KEY!):undefined});
-  await app.listen({port:Number(process.env.PORT??8792),host:'0.0.0.0'});
+  await app.listen({port:Number(process.env.PORT??8795),host:process.env.HOST??'127.0.0.1'});
   for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{void app.close().then(()=>process.exit(0));});
 }
