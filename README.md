@@ -77,3 +77,8 @@ Package id `net.dsect.quantum`, app name "Quantum" (`capacitor.config.ts`).
 Same pattern as Sol: `npm run build` → `npx cap sync` → Gradle assemble
 locally. No CI workflows are committed (the worker login lacks `workflow`
 scope) — builds happen on this machine.
+
+## Singularity (`apps/universal-hub`)
+
+The fleet feed. Posts carry structured `@mentions` and `#handles`, render live goal and task cards, and route agent mentions through the ping shape used by `quantum_agent_ping`. See `docs/singularity-universal-hub.md` and `apps/universal-hub/README.md`. Draft app, not merged into the Quantum shell.
+
