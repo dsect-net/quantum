@@ -77,3 +77,19 @@ Package id `net.dsect.quantum`, app name "Quantum" (`capacitor.config.ts`).
 Same pattern as Sol: `npm run build` → `npx cap sync` → Gradle assemble
 locally. No CI workflows are committed (the worker login lacks `workflow`
 scope) — builds happen on this machine.
+
+## The Singularity — universal collaboration hub (draft)
+
+- [`apps/universal-hub/`](apps/universal-hub/): React feed, structured @mentions
+  and #object/memory cards, comments/reactions, profiles and developer diagnostics;
+  installable PWA with a shell-only offline cache.
+- [`services/singularity/`](services/singularity/): SQLite-backed REST + eleven real
+  MCP tools, transport-bound identities, existing collab/agent-ping adapters and
+  universal-gateway federation registrar.
+- [Architecture, live integration gates and platform limitations](docs/singularity-universal-hub.md)
+  · [Development memory](docs/memory/singularity.md).
+
+Independent packages, following sibling app conventions; the root app/APK is
+unchanged. Live organization ingress and universal MCP registration still need
+Tritium verification. Demo mode never claims to contact the real fleet. Native
+signed Android/Apple/desktop builds and TV/Wear OS/Auto support are not shipped.

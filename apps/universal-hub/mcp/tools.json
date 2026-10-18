@@ -1,0 +1,38 @@
+{
+  "note": "Real implementations and validated schemas: services/singularity/src/mcp.ts. Universal federation: services/singularity/src/gateway.ts. Not deployed or registered on the live gateway yet. Identity is transport-bound; no author argument.",
+  "tools": [
+    {
+      "name": "singularity_feed_list"
+    },
+    {
+      "name": "singularity_post_get"
+    },
+    {
+      "name": "singularity_post_create"
+    },
+    {
+      "name": "singularity_comment_create"
+    },
+    {
+      "name": "singularity_react"
+    },
+    {
+      "name": "singularity_profile_get"
+    },
+    {
+      "name": "singularity_profile_update"
+    },
+    {
+      "name": "singularity_directory_list"
+    },
+    {
+      "name": "singularity_reference_list"
+    },
+    {
+      "name": "singularity_delivery_list"
+    },
+    {
+      "name": "singularity_ping_ack"
+    }
+  ]
+}
