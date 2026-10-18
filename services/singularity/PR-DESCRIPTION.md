@@ -46,3 +46,32 @@ The 22 `singularity_*` tools (posting, browsing, commenting, reacting, profiles,
 
 - Restricted-network install quirk (documented in service README): `better-sqlite3` prebuilt CDN is blocked in the build sandbox, so it compiles from source against local Node headers (`npm_config_nodedir`). Normal machines just fetch the prebuild.
 - Feed ranking is deliberately plain reverse-chronological — corporate minimalism applies to algorithms too.
+
+---
+
+## Update: reconciliation with main (PR #78 fleet feed)
+
+While this PR was open, `apps/universal-hub/` + an earlier `services/singularity/`
+(fleet feed: mention→ping/assignment routing, delivery outbox, fail-closed
+gateway identity) landed on main via #78. This PR now **merges and reconciles**
+that work instead of colliding with it — one service, two surfaces:
+
+- `/api/v1` + `/mcp` — the social hub above (22 `singularity_*` tools,
+  explicit-`actor` attribution, the notekeeper convention).
+- `/api/singularity/*` + `/mcp/fleet` — the universal-hub fleet surface, ported
+  verbatim under `services/singularity/src/fleet/` (strict same-origin writes,
+  transport-bound identity, `{error: message}` error shape). `apps/universal-hub`
+  is unchanged and its 17 tests pass.
+- Env split: `DATABASE_PATH` (social) vs `SINGULARITY_DB` (fleet); default port
+  **8795** (the hub ingress contract); runtime `tsx`. Fleet mounts only with
+  `SINGULARITY_DEMO=true` or full live env — fail-closed otherwise.
+- `src/gateway.ts` federates either MCP endpoint; for social tools it injects
+  the authenticated principal as `actor` (transport-bound identity in gateway
+  context).
+
+### Verification (updated)
+
+- `services/singularity`: **65/65** vitest (54 social + 11 fleet), `npm run smoke` OK, `tsc` clean
+- `apps/universal-hub`: **17/17** vitest, `npm run build` green (e2e needs Playwright browsers — blocked in this sandbox, ran in theirs)
+- `apps/singularity`: **26/26** vitest, `tsc --noEmit` clean, production build green
+- Live two-surface check: `/health` (demo flag), fleet session/publish/snapshot, `/mcp/fleet` = 11 tools, `/mcp` = 22 tools, social feed — all over real HTTP
