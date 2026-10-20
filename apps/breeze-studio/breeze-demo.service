@@ -1,0 +1,12 @@
+[Unit]
+Description=Breeze Studio - Quantum MCP media demo (Breeze TTS + Nebula)
+After=network.target
+
+[Service]
+WorkingDirectory=/home/scott/breeze-demo
+ExecStart=/usr/bin/python3 /home/scott/breeze-demo/breeze_server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
