@@ -8,9 +8,13 @@ import { defineConfig } from '@playwright/test';
  * deliverable. apps/bank and apps/bounty already had Playwright harnesses;
  * this gives the flagship app the same floor.
  *
- * The specs run against the Vite dev server with a clean browser profile,
- * so every service is unconfigured and the app must show its honest demo /
- * not-connected states — no live Tritium, no keys, no faked data.
+ * The app-shell specs run against the Vite dev server with a clean
+ * browser profile, so every service is unconfigured and the app must
+ * show its honest demo / not-connected states — no live Tritium, no
+ * keys, no faked data. The live-mode specs (e2e/live-mode.spec.ts) cover
+ * the opposite contract — configured base URLs rendering real returned
+ * data — against the deterministic stub API in e2e/fixtures/hub-api.ts,
+ * still with no live Tritium and no keys.
  *
  * Run: npm run test:e2e   (screenshots land in e2e/screenshots/)
  */
