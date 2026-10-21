@@ -1,0 +1,382 @@
+/* Tracker board layout — everything visual comes from kit tokens;
+ * this file is structure, spacing, and the board-specific pieces
+ * (columns, cards, sheet, drag states) the kit doesn't ship. */
+
+.tb-app {
+  min-height: 100dvh;
+  background: var(--bg-2);
+  color: var(--fg);
+  font-family: var(--sans);
+}
+
+.tb-main {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ---- hero (warmth layer, per Scotty's Oct 20 design refs) ---- */
+.tb-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+.tb-hero__greet {
+  font-size: 20px;
+  font-weight: 650;
+  margin: 0;
+}
+.tb-hero__sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--fg-5);
+}
+.tb-hero__progress {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+.tb-hero__progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--fg-4);
+  margin-bottom: var(--space-2);
+}
+.tb-hero__doodle {
+  font-family: "Segoe Script", "Bradley Hand", cursive;
+  color: var(--division-labs, #7c3aed);
+  transform: rotate(-3deg);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+/* ---- filter row ---- */
+.tb-app .filterbar label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-4);
+}
+.tb-app .filterbar__content {
+  align-items: center;
+}
+.tb-app .filterbar select {
+  min-height: var(--tap);
+}
+/* The kit sizes the search input with flex: 1 1 180px (row growth);
+ * when the bar stacks on phones that basis turns into a 180px-tall
+ * box, so the board pins it to the tap height instead. */
+.tb-app .filterbar__content input.tb-search {
+  flex: 0 1 420px;
+  min-width: 200px;
+  height: var(--tap);
+  min-height: var(--tap);
+  align-self: center;
+}
+
+/* ---- board ---- */
+.tb-board {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: var(--space-4);
+}
+.tb-col {
+  flex: 1 1 240px;
+  min-width: 220px;
+  max-width: 340px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+}
+.tb-col.drop-hover {
+  background: color-mix(in srgb, var(--division-labs, #7c3aed) 6%, transparent);
+  outline: 2px dashed color-mix(in srgb, var(--division-labs, #7c3aed) 45%, transparent);
+  outline-offset: -2px;
+}
+.tb-col__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-3);
+  margin: 0 0 var(--space-3);
+  padding: 0 var(--space-1);
+}
+.tb-col__count {
+  background: var(--ink-btn-bg);
+  color: var(--ink-btn-fg);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tb-col__empty {
+  font-size: 12.5px;
+  color: var(--fg-5);
+  border: 1px dashed var(--border-3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  text-align: center;
+}
+.tb-col__more {
+  font-size: 12px;
+  color: var(--fg-5);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* ---- cards ---- */
+.tb-card {
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+}
+.tb-card:active {
+  background: var(--surface-hover);
+}
+.tb-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.tb-card__id {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--division-labs, #7c3aed);
+}
+.tb-card__kind {
+  font-size: 11px;
+  color: var(--fg-5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tb-card__title {
+  font-size: 13.5px;
+  line-height: 1.35;
+  margin: var(--space-1) 0 var(--space-2);
+}
+.tb-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11.5px;
+  color: var(--fg-5);
+  flex-wrap: wrap;
+}
+.tb-card__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+.tb-card__due {
+  margin-left: auto;
+}
+
+/* ---- detail sheet ---- */
+.tb-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-micro);
+  z-index: 40;
+}
+.tb-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.tb-sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100dvh;
+  width: 460px;
+  max-width: 100vw;
+  background: var(--surface);
+  z-index: 50;
+  transform: translateX(102%);
+  transition: transform var(--dur-panel) ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-drawer);
+}
+.tb-sheet.open {
+  transform: translateX(0);
+}
+.tb-sheet__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-2);
+}
+.tb-sheet__body {
+  overflow-y: auto;
+  padding: var(--space-4);
+  flex: 1;
+}
+.tb-sheet__foot {
+  padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border-2);
+  background: var(--surface);
+}
+.tb-field {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+.tb-field > span {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-4);
+  margin-bottom: var(--space-2);
+}
+.tb-field input,
+.tb-field select,
+.tb-field textarea {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border: 1px solid var(--border-3);
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--fg);
+}
+.tb-field textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.45;
+}
+.tb-row2 {
+  display: flex;
+  gap: var(--space-3);
+}
+.tb-row2 > .tb-field {
+  flex: 1;
+}
+.tb-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.tb-seg button {
+  flex: 1 1 30%;
+  min-height: 48px;
+  padding: 10px 6px;
+  border: 1px solid var(--border-3);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  font-size: 13.5px;
+  cursor: pointer;
+  color: var(--fg);
+}
+.tb-seg button.on {
+  background: var(--ink-btn-bg);
+  color: var(--ink-btn-fg);
+  border-color: var(--ink-btn-bg);
+  font-weight: 600;
+}
+.tb-facts {
+  font-size: 13px;
+  color: var(--fg-4);
+  line-height: 1.7;
+  border-top: 1px solid var(--border-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
+}
+.tb-facts b {
+  color: var(--fg);
+  font-weight: 600;
+}
+.tb-comment {
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.tb-comment__head {
+  font-size: 11.5px;
+  color: var(--fg-5);
+  margin-bottom: var(--space-1);
+}
+.tb-comment__text {
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tb-activity {
+  font-size: 12px;
+  color: var(--fg-5);
+  line-height: 1.6;
+}
+.tb-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-4);
+  margin: var(--space-5) 0 var(--space-2);
+}
+.tb-savemsg {
+  font-size: 13px;
+  min-height: 18px;
+  margin-top: var(--space-2);
+  text-align: center;
+}
+.tb-savemsg.err {
+  color: var(--red);
+}
+.tb-savemsg.ok {
+  color: var(--emerald);
+}
+
+/* ---- responsive: stack like the stopgap, never clip ---- */
+@media (max-width: 760px) {
+  .tb-board {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+  .tb-col {
+    max-width: none;
+    width: 100%;
+    flex: none;
+  }
+  .tb-main {
+    padding: var(--space-3);
+  }
+  .tb-hero {
+    gap: var(--space-3);
+  }
+  .tb-hero__doodle {
+    display: none;
+  }
+  .tb-app .filterbar__content input.tb-search {
+    flex: 0 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-sheet,
+  .tb-backdrop {
+    transition: none;
+  }
+}
