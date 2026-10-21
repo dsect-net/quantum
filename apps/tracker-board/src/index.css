@@ -1,0 +1,10 @@
+/* Kit CSS layering, mirroring the root Quantum app's src/index.css
+ * (fonts -> tokens -> base in layer(base) -> components in
+ * layer(components)). No data-theme attribute anywhere: the kit's
+ * light set is the default since 2026-09-26, and the board is a
+ * light-first surface. */
+@import "../../../vendor/design-system/fonts.css";
+@import "../../../vendor/design-system/tokens.css";
+@import "../../../vendor/design-system/base.css" layer(base);
+@import "../../../vendor/design-system/components.css" layer(components);
+@import "./board.css";
