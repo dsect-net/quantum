@@ -23,6 +23,10 @@ export interface BoardItem {
   due_at: string;
   points: number | null;
   updated_at: string;
+  /** Newest event ts (edit/status/comment), from the snapshot. */
+  last_activity_at?: string | null;
+  /** Item labels (item_tags). */
+  tags?: string[];
 }
 
 /** A project hub: a goal item joined by undirected 'project' relations. */

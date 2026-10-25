@@ -348,7 +348,46 @@
 }
 
 /* ---- responsive: stack like the stopgap, never clip ---- */
+/* Phone column tabs (TRK-0204): hidden on desktop. */
+.tb-coltabs {
+  display: none;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+  scrollbar-width: none;
+}
+.tb-coltabs button {
+  flex: none;
+  border: 1px solid var(--border, #e2e2ea);
+  background: var(--surface, #fff);
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.875rem;
+  min-height: 36px;
+  cursor: pointer;
+}
+.tb-coltabs button span { opacity: 0.7; margin-left: 2px; }
+.tb-coltabs button.on {
+  background: var(--division-labs, #7c3aed);
+  border-color: var(--division-labs, #7c3aed);
+  color: #fff;
+}
+.tb-card__stale {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #8a4b00;
+  background: #fff1db;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
 @media (max-width: 760px) {
+  .tb-coltabs { display: flex; }
+  .tb-col { display: none; }
+  .tb-col.is-mobile-active { display: block; }
   .tb-board {
     flex-direction: column;
     overflow-x: visible;
@@ -379,4 +418,23 @@
   .tb-backdrop {
     transition: none;
   }
+}
+
+/* Phone: put the two filter toggles side by side instead of stacked full-width rows. */
+@media (max-width: 760px) {
+  .tb-app .filterbar__content { flex-wrap: wrap; }
+  .tb-app .filterbar__content > button { flex: 1 1 45%; width: auto; }
+}
+
+/* Stuck WIP: distinct from stale (amber) — cool indigo outline chip. */
+.tb-card__stuck {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #3730a3;
+  background: #eef2ff;
+  border: 1px solid #a5b4fc;
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
 }

@@ -34,9 +34,16 @@ def main():
         dict(r)
         for r in con.execute(
             "select id, kind, title, status, priority, assignee, due_at,"
-            " points, updated_at from items"
+            " points, updated_at,"
+            " (select max(ts) from events e where e.item_id = items.id) as last_activity_at"
+            " from items"
         )
     ]
+    tags = {}
+    for t in con.execute("select item_id, tag from item_tags"):
+        tags.setdefault(t[0], []).append(t[1])
+    for it in items:
+        it["tags"] = sorted(tags.get(it["id"], []))
     goals = {
         r["id"]: r["title"]
         for r in con.execute("select id, title from items where kind='goal'")

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell, AppBar } from '@dsect/ui/components/app';
+import { STALE_THRESHOLD_DAYS, STUCK_WIP_DAYS, countStale, countStuckWip, daysSinceActivity, isStale, isStuckWip } from './lib/stale';
 import { Card, Panel, PanelBody } from '@dsect/ui/components/surfaces';
 import {
   Badge,
@@ -59,6 +60,13 @@ export default function App() {
   >([]);
   const [generatedAt, setGeneratedAt] = useState('');
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  // TRK-0204 (Pixel): stale filter, collapsible Cancelled column, phone column tabs.
+  const [staleOnly, setStaleOnly] = useState(false);
+  const [stuckOnly, setStuckOnly] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(
+    () => localStorage.getItem('tb-show-cancelled') === '1',
+  );
+  const [mobileCol, setMobileCol] = useState<Status>('in_progress');
   const [reloadKey, setReloadKey] = useState(0);
 
   const [projectSlug, setProjectSlug] = useState(
@@ -125,13 +133,30 @@ export default function App() {
     [scoped],
   );
 
+  // Canonical stale count: whole board, all owners (not project-scoped).
+  const staleCount = useMemo(() => countStale(items ?? []), [items]);
+  const stuckCount = useMemo(() => countStuckWip(items ?? []), [items]);
+
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return scoped;
-    return scoped.filter((i) =>
+    const base = staleOnly
+      ? scoped.filter((i) => isStale(i))
+      : stuckOnly
+        ? scoped.filter((i) => isStuckWip(i))
+        : scoped;
+    if (!q) return base;
+    return base.filter((i) =>
       [i.id, i.kind, i.title, i.assignee].some((v) => v.toLowerCase().includes(q)),
     );
-  }, [scoped, filter]);
+  }, [scoped, filter, staleOnly, stuckOnly]);
+
+  useEffect(() => {
+    localStorage.setItem('tb-show-cancelled', showCancelled ? '1' : '0');
+  }, [showCancelled]);
+
+  const columns = showCancelled
+    ? [...COLUMNS, { status: 'cancelled' as Status, label: 'Cancelled' }]
+    : COLUMNS;
 
   const hero = useMemo(() => {
     const total = scoped.reduce((s, i) => s + (i.points ?? 0), 0);
@@ -289,6 +314,34 @@ export default function App() {
               onChange={(e) => setFilter(e.target.value)}
               aria-label="Filter cards"
             />
+            <Button
+              variant={staleOnly ? 'primary' : 'ghost'}
+              aria-pressed={staleOnly}
+              onClick={() => {
+                setStaleOnly((v) => !v);
+                setStuckOnly(false);
+              }}
+            >
+              Stale only ({staleCount})
+            </Button>
+            <Button
+              className="tb-stuck-btn"
+              variant={stuckOnly ? 'primary' : 'ghost'}
+              aria-pressed={stuckOnly}
+              onClick={() => {
+                setStuckOnly((v) => !v);
+                setStaleOnly(false);
+              }}
+            >
+              Stuck WIP ({stuckCount})
+            </Button>
+            <Button
+              variant="ghost"
+              aria-pressed={showCancelled}
+              onClick={() => setShowCancelled((v) => !v)}
+            >
+              {showCancelled ? 'Hide' : 'Show'} cancelled
+            </Button>
           </FilterBar>
 
           {loadErr ? (
@@ -308,14 +361,29 @@ export default function App() {
               <Skeleton style={{ height: 120 }} />
             </div>
           ) : (
+            <>
+            <nav className="tb-coltabs" aria-label="Board columns">
+              {columns.map(({ status, label }) => (
+                <button
+                  key={status}
+                  type="button"
+                  className={mobileCol === status ? 'on' : ''}
+                  aria-pressed={mobileCol === status}
+                  onClick={() => setMobileCol(status)}
+                >
+                  {label.replace(' (recent)', '')}{' '}
+                  <span>{visible.filter((i) => i.status === status).length}</span>
+                </button>
+              ))}
+            </nav>
             <div className="tb-board">
-              {COLUMNS.map(({ status, label }) => {
+              {columns.map(({ status, label }) => {
                 const colItems = visible.filter((i) => i.status === status);
                 const shown = status === 'done' ? colItems.slice(0, DONE_SHOWN) : colItems;
                 return (
                   <section
                     key={status}
-                    className={`tb-col${hoverStatus === status && dragId ? ' drop-hover' : ''}`}
+                    className={`tb-col${hoverStatus === status && dragId ? ' drop-hover' : ''}${mobileCol === status ? ' is-mobile-active' : ''}`}
                     data-status={status}
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -351,6 +419,16 @@ export default function App() {
                         <div className="tb-card__top">
                           <span className="tb-card__id">{item.id}</span>
                           <span className="tb-card__kind">{item.kind}</span>
+                          {isStale(item) && (
+                            <span className="tb-card__stale" title={`No activity in over ${STALE_THRESHOLD_DAYS} days`}>
+                              stale {daysSinceActivity(item)}d
+                            </span>
+                          )}
+                          {!isStale(item) && isStuckWip(item) && (
+                            <span className="tb-card__stuck" title={`In progress/review with no activity in over ${STUCK_WIP_DAYS} days`}>
+                              stuck {daysSinceActivity(item)}d
+                            </span>
+                          )}
                         </div>
                         <div className="tb-card__title">{item.title}</div>
                         <div className="tb-card__meta">
@@ -377,6 +455,7 @@ export default function App() {
                 );
               })}
             </div>
+            </>
           )}
         </main>
       </AppShell>
@@ -536,3 +615,5 @@ export default function App() {
     </div>
   );
 }
+
+
