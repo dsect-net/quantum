@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell, AppBar } from '@dsect/ui/components/app';
+import { STALE_THRESHOLD_DAYS, countStale, daysSinceActivity, isStale } from './lib/stale';
 import { Card, Panel, PanelBody } from '@dsect/ui/components/surfaces';
 import {
   Badge,
@@ -131,9 +132,12 @@ export default function App() {
     [scoped],
   );
 
+  // Canonical stale count: whole board, all owners (not project-scoped).
+  const staleCount = useMemo(() => countStale(items ?? []), [items]);
+
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const base = staleOnly ? scoped.filter(isStale) : scoped;
+    const base = staleOnly ? scoped.filter((i) => isStale(i)) : scoped;
     if (!q) return base;
     return base.filter((i) =>
       [i.id, i.kind, i.title, i.assignee].some((v) => v.toLowerCase().includes(q)),
@@ -309,7 +313,7 @@ export default function App() {
               aria-pressed={staleOnly}
               onClick={() => setStaleOnly((v) => !v)}
             >
-              Stale only ({scoped.filter(isStale).length})
+              Stale only ({staleCount})
             </Button>
             <Button
               variant="ghost"
@@ -396,8 +400,8 @@ export default function App() {
                           <span className="tb-card__id">{item.id}</span>
                           <span className="tb-card__kind">{item.kind}</span>
                           {isStale(item) && (
-                            <span className="tb-card__stale" title="No update in over 3 days">
-                              stale {daysSince(item.updated_at)}d
+                            <span className="tb-card__stale" title={`No activity in over ${STALE_THRESHOLD_DAYS} days`}>
+                              stale {daysSinceActivity(item)}d
                             </span>
                           )}
                         </div>
@@ -587,12 +591,4 @@ export default function App() {
   );
 }
 
-const STALE_DAYS = 3;
-function daysSince(iso: string): number {
-  const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? 0 : Math.floor((Date.now() - t) / 86_400_000);
-}
-/** Same rule as the stopgap board's "stale" chip: active work untouched > 3 days. */
-export function isStale(i: BoardItem): boolean {
-  return (i.status === 'in_progress' || i.status === 'in_review') && daysSince(i.updated_at) > STALE_DAYS;
-}
+
