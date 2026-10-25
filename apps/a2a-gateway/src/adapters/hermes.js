@@ -386,10 +386,17 @@ function userPrompt(task, cfg) {
       ].join("\n\n");
     case "fleet-brief": {
       const rel = `a2a/${task.id}.md`;
+      // Field lesson (2026-10-25, two live attempts): Qubit's API turns
+      // end early on long multi-step gathering — the agent narrated its
+      // fact-finding and the turn closed before the file was written.
+      // This prompt is therefore deliberately lean: two commands, then
+      // the file write is the deliverable, narration forbidden.
       return [
         `Conversation so far:\n${convo}`,
-        `Task: produce a short fleet status brief. Gather live facts with your tools: host uptime and load (uptime), running docker containers grouped by role (docker ps), and your own gateway status if handy.`,
-        `Write the brief as markdown to the file ${rel} inside your workspace (create the a2a directory if needed). Then reply with the full brief text. Keep it under 400 words, factual, with the numbers you actually observed.`,
+        `Task: produce a SHORT fleet status brief. Work in as few steps as possible — do not narrate between steps, act.`,
+        `Step 1: run exactly these two commands: (a) uptime (b) cat host-status.json 2>/dev/null || echo no-host-status-file. Do NOT run docker — the daemon is not reachable from inside your container.`,
+        `Step 2: IMMEDIATELY write the brief as markdown (max 150 words, only facts you actually observed in step 1) to the file ${rel} inside your workspace (create the a2a directory if needed).`,
+        `Step 3: reply with the brief text only. The file in step 2 is the deliverable — if you run low on steps, write the file first and skip the reply text.`,
       ].join("\n\n");
     }
     case "gated-file-read": {
