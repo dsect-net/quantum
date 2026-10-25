@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell, AppBar } from '@dsect/ui/components/app';
-import { STALE_THRESHOLD_DAYS, countStale, daysSinceActivity, isStale } from './lib/stale';
+import { STALE_THRESHOLD_DAYS, STUCK_WIP_DAYS, countStale, countStuckWip, daysSinceActivity, isStale, isStuckWip } from './lib/stale';
 import { Card, Panel, PanelBody } from '@dsect/ui/components/surfaces';
 import {
   Badge,
@@ -62,6 +62,7 @@ export default function App() {
   const [loadErr, setLoadErr] = useState<string | null>(null);
   // TRK-0204 (Pixel): stale filter, collapsible Cancelled column, phone column tabs.
   const [staleOnly, setStaleOnly] = useState(false);
+  const [stuckOnly, setStuckOnly] = useState(false);
   const [showCancelled, setShowCancelled] = useState(
     () => localStorage.getItem('tb-show-cancelled') === '1',
   );
@@ -134,15 +135,20 @@ export default function App() {
 
   // Canonical stale count: whole board, all owners (not project-scoped).
   const staleCount = useMemo(() => countStale(items ?? []), [items]);
+  const stuckCount = useMemo(() => countStuckWip(items ?? []), [items]);
 
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const base = staleOnly ? scoped.filter((i) => isStale(i)) : scoped;
+    const base = staleOnly
+      ? scoped.filter((i) => isStale(i))
+      : stuckOnly
+        ? scoped.filter((i) => isStuckWip(i))
+        : scoped;
     if (!q) return base;
     return base.filter((i) =>
       [i.id, i.kind, i.title, i.assignee].some((v) => v.toLowerCase().includes(q)),
     );
-  }, [scoped, filter, staleOnly]);
+  }, [scoped, filter, staleOnly, stuckOnly]);
 
   useEffect(() => {
     localStorage.setItem('tb-show-cancelled', showCancelled ? '1' : '0');
@@ -311,9 +317,23 @@ export default function App() {
             <Button
               variant={staleOnly ? 'primary' : 'ghost'}
               aria-pressed={staleOnly}
-              onClick={() => setStaleOnly((v) => !v)}
+              onClick={() => {
+                setStaleOnly((v) => !v);
+                setStuckOnly(false);
+              }}
             >
               Stale only ({staleCount})
+            </Button>
+            <Button
+              className="tb-stuck-btn"
+              variant={stuckOnly ? 'primary' : 'ghost'}
+              aria-pressed={stuckOnly}
+              onClick={() => {
+                setStuckOnly((v) => !v);
+                setStaleOnly(false);
+              }}
+            >
+              Stuck WIP ({stuckCount})
             </Button>
             <Button
               variant="ghost"
@@ -402,6 +422,11 @@ export default function App() {
                           {isStale(item) && (
                             <span className="tb-card__stale" title={`No activity in over ${STALE_THRESHOLD_DAYS} days`}>
                               stale {daysSinceActivity(item)}d
+                            </span>
+                          )}
+                          {!isStale(item) && isStuckWip(item) && (
+                            <span className="tb-card__stuck" title={`In progress/review with no activity in over ${STUCK_WIP_DAYS} days`}>
+                              stuck {daysSinceActivity(item)}d
                             </span>
                           )}
                         </div>

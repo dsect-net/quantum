@@ -425,3 +425,16 @@
   .tb-app .filterbar__content { flex-wrap: wrap; }
   .tb-app .filterbar__content > button { flex: 1 1 45%; width: auto; }
 }
+
+/* Stuck WIP: distinct from stale (amber) — cool indigo outline chip. */
+.tb-card__stuck {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #3730a3;
+  background: #eef2ff;
+  border: 1px solid #a5b4fc;
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
+}

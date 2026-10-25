@@ -45,3 +45,19 @@ export function daysSinceActivity(i: StaleInput, now: number = Date.now()): numb
   const t = lastActivityMs(i);
   return Number.isNaN(t) ? 0 : Math.floor((now - t) / DAY_MS);
 }
+
+/** Stuck WIP (separate signal from stale): active work with no activity
+ * (same last-activity definition) for more than STUCK_WIP_DAYS. */
+export const STUCK_WIP_DAYS = 3;
+export const STUCK_WIP_STATUSES = ['in_progress', 'in_review'] as const;
+
+export function isStuckWip(i: StaleInput, now: number = Date.now()): boolean {
+  if (!(STUCK_WIP_STATUSES as readonly string[]).includes(i.status.toLowerCase())) return false;
+  const t = lastActivityMs(i);
+  if (Number.isNaN(t)) return false;
+  return now - t > STUCK_WIP_DAYS * DAY_MS;
+}
+
+export function countStuckWip(items: StaleInput[], now: number = Date.now()): number {
+  return items.reduce((n, i) => n + (isStuckWip(i, now) ? 1 : 0), 0);
+}
