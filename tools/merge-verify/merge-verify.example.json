@@ -1,0 +1,33 @@
+{
+  "require_clean": true,
+  "checks": [
+    {
+      "name": "typecheck",
+      "command": [
+        "npx",
+        "tsc",
+        "--noEmit"
+      ],
+      "timeout_s": 600
+    },
+    {
+      "name": "unit-tests",
+      "command": [
+        "npm",
+        "test",
+        "--",
+        "--run"
+      ],
+      "timeout_s": 900
+    },
+    {
+      "name": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "timeout_s": 900
+    }
+  ]
+}
