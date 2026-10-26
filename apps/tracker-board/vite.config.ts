@@ -1,31 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
 
-const root = path.dirname(fileURLToPath(import.meta.url));
-
-// @dsect/ui is consumed exactly the way the root Quantum app consumes it:
-// aliased to the vendor/design-system submodule SOURCE, importing component
-// modules directly (never the bare entry — its index.ts pulls kit CSS
-// unlayered). See ~/workspace/quantum/vite.config.ts for the original.
-// The /api proxy targets the live tracker-board service (Tritium :7654).
-// When developing off-box, forward it first, e.g.:
-//   ssh -L 7654:127.0.0.1:7654 scott@tritium-linux
-// and it lines up with the default target. Override with TRACKER_API.
+// The /api proxy targets the live tracker-board service (Tritium :7654),
+// which serves item detail (GET /api/item/<id>) and edits
+// (POST /api/item/<id>/update). The board list itself comes from the
+// snapshot at /board-data.json (see scripts/snapshot-board.py) — the
+// service has no list endpoint. Override the target with TRACKER_API,
+// e.g. TRACKER_API=http://100.66.182.7:7654 (Tritium tailnet IP).
 const apiTarget = process.env.TRACKER_API ?? 'http://127.0.0.1:7654';
 const apiProxy = { '/api': { target: apiTarget, changeOrigin: true } };
 
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: [
-      {
-        find: /^@dsect\/ui(\/|$)/,
-        replacement: path.resolve(root, '../../vendor/design-system/react/src') + '$1',
-      },
-    ],
-  },
+  plugins: [react(), tailwindcss()],
   server: { port: 5174, proxy: apiProxy },
   preview: { port: 4174, proxy: apiProxy },
 });

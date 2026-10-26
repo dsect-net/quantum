@@ -1,107 +1,62 @@
-/** Board domain types — mirrored from board_server.py (the stopgap service).
- * Keep these in lockstep with TRK-0204's contract until P5 (TRK-0273)
- * ships a real JSON board API. */
-
-export type Status =
-  | 'planned'
-  | 'in_progress'
-  | 'in_review'
+export type ColumnId =
+  | 'review'
+  | 'progress'
   | 'blocked'
+  | 'planned'
   | 'done'
-  | 'cancelled';
+  | 'backlog'
+  | 'cancelled'
 
-export type Priority = 'critical' | 'high' | 'medium' | 'low' | 'none';
+// 'none' is a real priority in the tracker backend (an item with no priority
+// set). It renders with 0 bars and ranks last — it is NOT folded into 'medium'.
+export type Priority = 'critical' | 'high' | 'medium' | 'low' | 'none'
 
-/** List-view row (board_server.fetch_rows): no body on the board payload. */
-export interface BoardItem {
-  id: string;
-  kind: string;
-  title: string;
-  status: Status;
-  priority: Priority;
-  assignee: string;
-  due_at: string;
-  points: number | null;
-  updated_at: string;
+export type Kind = 'task' | 'bug' | 'issue' | 'goal' | 'milestone' | 'decision'
+
+export interface Card {
+  id: string
+  title: string
+  description: string
+  kind: Kind
+  column: ColumnId
+  priority: Priority
+  assignee: string | null
+  points: number | null
+  due: string | null
+  project: string
+  stale: boolean
+  createdAt: number
+  updatedAt: number
 }
 
-/** A project hub: a goal item joined by undirected 'project' relations. */
-export interface Project {
-  id: string;
-  title: string;
-  slug: string;
-  member_ids: string[];
+export interface ColumnDef {
+  id: ColumnId
+  label: string
+  defaultCollapsed?: boolean
 }
 
-export interface BoardData {
-  generated_at: string;
-  items: BoardItem[];
-  projects: Project[];
-}
+export const COLUMNS: ColumnDef[] = [
+  { id: 'review', label: 'In review' },
+  { id: 'progress', label: 'In progress' },
+  { id: 'blocked', label: 'Blocked' },
+  { id: 'planned', label: 'Planned' },
+  { id: 'done', label: 'Done · recent' },
+  { id: 'backlog', label: 'Backlog', defaultCollapsed: true },
+  { id: 'cancelled', label: 'Cancelled', defaultCollapsed: true },
+]
 
-/** Full record from GET /api/item/<id>. */
-export interface ItemRecord extends BoardItem {
-  body: string;
-  parent_id: string;
-  source: string;
-  external_ref: string;
-  created_at: string;
-}
+export const COLUMN_LABEL: Record<ColumnId, string> = Object.fromEntries(
+  COLUMNS.map((c) => [c.id, c.label]),
+) as Record<ColumnId, string>
 
-export interface EventRow {
-  ts: string;
-  actor: string;
-  kind: string;
-  text: string;
-}
+export const PRIORITIES: { id: Priority; label: string; bars: number }[] = [
+  { id: 'critical', label: 'Critical', bars: 4 },
+  { id: 'high', label: 'High', bars: 3 },
+  { id: 'medium', label: 'Medium', bars: 2 },
+  { id: 'low', label: 'Low', bars: 1 },
+  { id: 'none', label: 'None', bars: 0 },
+]
 
-export interface ItemDetail {
-  item: ItemRecord;
-  comments: EventRow[];
-  history: EventRow[];
-}
+export const KINDS: Kind[] = ['task', 'bug', 'issue', 'goal', 'milestone', 'decision']
 
-/** Fields POST /api/item/<id>/update accepts (server whitelist). */
-export interface ItemUpdate {
-  title?: string;
-  body?: string;
-  status?: Status;
-  priority?: Priority;
-  assignee?: string;
-  due_at?: string;
-  points?: number | null;
-}
-
-/** Rendered columns, in stopgap order. Cancelled has no column. */
-export const COLUMNS: { status: Status; label: string }[] = [
-  { status: 'in_review', label: 'In Review' },
-  { status: 'in_progress', label: 'In Progress' },
-  { status: 'blocked', label: 'Blocked' },
-  { status: 'planned', label: 'Planned' },
-  { status: 'done', label: 'Done (recent)' },
-];
-
-export const STATUS_LABELS: Record<Status, string> = {
-  planned: 'Planned',
-  in_progress: 'In Progress',
-  in_review: 'In Review',
-  blocked: 'Blocked',
-  done: 'Done',
-  cancelled: 'Cancelled',
-};
-
-export const ALL_STATUSES = Object.keys(STATUS_LABELS) as Status[];
-
-export const PRIORITIES: Priority[] = ['critical', 'high', 'medium', 'low', 'none'];
-
-/** Priority dot colors — same values as board_server.PRIIO_COLORS. */
-export const PRIO_COLORS: Record<Priority, string> = {
-  critical: '#dc2626',
-  high: '#ea580c',
-  medium: '#ca8a04',
-  low: '#6b7280',
-  none: '#d1d5db',
-};
-
-/** Done column shows at most this many cards (stopgap DONE_SHOWN). */
-export const DONE_SHOWN = 30;
+export const POINT_OPTIONS = [1, 2, 3, 5, 8, 13]

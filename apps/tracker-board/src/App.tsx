@@ -1,538 +1,399 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AppShell, AppBar } from '@dsect/ui/components/app';
-import { Card, Panel, PanelBody } from '@dsect/ui/components/surfaces';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import {
-  Badge,
-  EmptyState,
-  ProgressBar,
-  Skeleton,
-  Toaster,
-  type ToastData,
-} from '@dsect/ui/components/feedback';
-import { FilterBar, SearchInput, FilterSelect } from '@dsect/ui/components/navigation';
-import { Button } from '@dsect/ui/components/buttons';
-import { loadBoard, fetchItem, updateItem } from './api';
-import {
-  ALL_STATUSES,
-  COLUMNS,
-  DONE_SHOWN,
-  PRIO_COLORS,
-  PRIORITIES,
-  STATUS_LABELS,
-  type BoardItem,
-  type ItemDetail,
-  type Priority,
-  type Status,
-} from './types';
+  ArrowDownUp,
+  ArrowRight,
+  Check,
+  ChevronsLeftRight,
+  Copy,
+  Flag,
+  Link2,
+  Moon,
+  PanelRight,
+  Sun,
+  Trash2,
+  Undo2,
+  User,
+  Columns3,
+  List,
+} from 'lucide-react'
+import { Board } from './components/Board'
+import { ContextMenu } from './components/ContextMenu'
+import type { MenuItem } from './components/ContextMenu'
+import { Drawer } from './components/Drawer'
+import { Header } from './components/Header'
+import type { Filters } from './components/Header'
+import { ListView } from './components/ListView'
+import { Settings } from './components/Settings'
+import { Toast } from './components/Toast'
+import type { ToastData } from './components/Toast'
+import { useBoard } from './lib/store'
+import { COLUMNS, COLUMN_LABEL, PRIORITIES } from './types'
+import type { Card, ColumnId } from './types'
 
-const ET = 'America/New_York';
+type Theme = 'light' | 'dark'
 
-function etHour(): number {
-  return Number(
-    new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: ET }).format(
-      new Date(),
-    ),
-  );
+function initialTheme(): Theme {
+  try {
+    const s = localStorage.getItem('tracker.theme')
+    if (s === 'light' || s === 'dark') return s
+  } catch {
+    /* ignore */
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-function fmtTs(ts: string): string {
-  const d = new Date(ts);
-  return Number.isNaN(d.getTime())
-    ? ts
-    : d.toLocaleString('en-US', { timeZone: ET, dateStyle: 'medium', timeStyle: 'short' });
-}
-
-interface EditForm {
-  title: string;
-  status: Status;
-  priority: Priority;
-  assignee: string;
-  due_at: string;
-  points: string;
-  body: string;
-}
+const defaultCollapsed = () =>
+  Object.fromEntries(COLUMNS.map((c) => [c.id, !!c.defaultCollapsed])) as Record<ColumnId, boolean>
 
 export default function App() {
-  const [items, setItems] = useState<BoardItem[] | null>(null);
-  const [projects, setProjects] = useState<
-    { id: string; title: string; slug: string; member_ids: string[] }[]
-  >([]);
-  const [generatedAt, setGeneratedAt] = useState('');
-  const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [theme, setTheme] = useState<Theme>(initialTheme)
+  const [view, setView] = useState<'board' | 'list'>(() => (localStorage.getItem('tracker.view') === 'list' ? 'list' : 'board'))
+  const [query, setQuery] = useState('')
+  const [filters, setFilters] = useState<Filters>({ project: null, assignee: null, priority: null })
+  const [collapsed, setCollapsed] = useState<Record<ColumnId, boolean>>(defaultCollapsed)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [toast, setToast] = useState<ToastData | null>(null)
+  const toastTimer = useRef(0)
+  const toastId = useRef(0)
+  const searchRef = useRef<HTMLInputElement>(null)
 
-  const [projectSlug, setProjectSlug] = useState(
-    () => new URLSearchParams(window.location.search).get('project') ?? '',
-  );
-  const [filter, setFilter] = useState(() => sessionStorage.getItem('tb-filter') ?? '');
+  const notify = useCallback((message: string, undoable = false) => {
+    window.clearTimeout(toastTimer.current)
+    setToast({ id: ++toastId.current, message, undoable })
+    toastTimer.current = window.setTimeout(() => setToast(null), 4500)
+  }, [])
 
-  const [sheetId, setSheetId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<ItemDetail | null>(null);
-  const [form, setForm] = useState<EditForm | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const board = useBoard(notify)
+  const { cards } = board
 
-  const [toasts, setToasts] = useState<ToastData[]>([]);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [hoverStatus, setHoverStatus] = useState<Status | null>(null);
-
-  const pushToast = (t: Omit<ToastData, 'id'>) => {
-    const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setToasts((prev) => [...prev, { ...t, id }]);
-    window.setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), 4500);
-  };
-
+  // theme
   useEffect(() => {
-    let live = true;
-    loadBoard()
-      .then((data) => {
-        if (!live) return;
-        setItems(data.items);
-        setProjects(data.projects);
-        setGeneratedAt(data.generated_at);
-        setLoadErr(null);
-      })
-      .catch((err: Error) => {
-        if (live) setLoadErr(err.message);
-      });
-    return () => {
-      live = false;
-    };
-  }, [reloadKey]);
-
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    try {
+      localStorage.setItem('tracker.theme', theme)
+    } catch {
+      /* ignore */
+    }
+  }, [theme])
   useEffect(() => {
-    sessionStorage.setItem('tb-filter', filter);
-  }, [filter]);
+    try {
+      localStorage.setItem('tracker.view', view)
+    } catch {
+      /* ignore */
+    }
+  }, [view])
 
-  const activeProject = useMemo(
-    () => projects.find((p) => p.slug === projectSlug) ?? null,
-    [projects, projectSlug],
-  );
+  const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
 
-  const scoped = useMemo(() => {
-    if (!items) return [];
-    if (!activeProject) return items;
-    const members = new Set(activeProject.member_ids);
-    return items.filter((i) => members.has(i.id));
-  }, [items, activeProject]);
+  const projects = useMemo(() => Array.from(new Set(cards.map((c) => c.project))).sort(), [cards])
+  const assignees = useMemo(() => {
+    const s = new Set<string>(['cooper', 'scotty'])
+    cards.forEach((c) => c.assignee && s.add(c.assignee))
+    return Array.from(s).sort()
+  }, [cards])
 
-  const counts = useMemo(
-    () => ({
-      open: scoped.filter((i) => i.status !== 'done' && i.status !== 'cancelled').length,
-      done: scoped.filter((i) => i.status === 'done').length,
-      cancelled: scoped.filter((i) => i.status === 'cancelled').length,
-    }),
-    [scoped],
-  );
-
-  const visible = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return scoped;
-    return scoped.filter((i) =>
-      [i.id, i.kind, i.title, i.assignee].some((v) => v.toLowerCase().includes(q)),
-    );
-  }, [scoped, filter]);
-
-  const hero = useMemo(() => {
-    const total = scoped.reduce((s, i) => s + (i.points ?? 0), 0);
-    const done = scoped
-      .filter((i) => i.status === 'done')
-      .reduce((s, i) => s + (i.points ?? 0), 0);
-    const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
-    const week = scoped
-      .filter((i) => i.status === 'done' && new Date(i.updated_at).getTime() >= weekAgo)
-      .reduce((s, i) => s + (i.points ?? 0), 0);
-    return { total, done, week, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
-  }, [scoped]);
-
-  const selectProject = (slug: string) => {
-    setProjectSlug(slug);
-    const url = new URL(window.location.href);
-    if (slug) url.searchParams.set('project', slug);
-    else url.searchParams.delete('project');
-    window.history.replaceState(null, '', url);
-  };
-
-  const mergeItem = (fresh: BoardItem) =>
-    setItems((prev) => (prev ? prev.map((i) => (i.id === fresh.id ? { ...i, ...fresh } : i)) : prev));
-
-  const openItem = (id: string) => {
-    setSheetId(id);
-    setDetail(null);
-    setForm(null);
-    setSaveMsg(null);
-    fetchItem(id)
-      .then((d) => {
-        setDetail(d);
-        setForm({
-          title: d.item.title,
-          status: d.item.status,
-          priority: d.item.priority,
-          assignee: d.item.assignee,
-          due_at: d.item.due_at ? d.item.due_at.slice(0, 10) : '',
-          points: d.item.points === null ? '' : String(d.item.points),
-          body: d.item.body,
-        });
-      })
-      .catch((err: Error) => {
-        pushToast({ tone: 'err', title: `Could not load ${id}`, text: err.message });
-        setSheetId(null);
-      });
-  };
-
-  const save = () => {
-    if (!sheetId || !form) return;
-    setSaving(true);
-    setSaveMsg(null);
-    updateItem(sheetId, {
-      title: form.title,
-      body: form.body,
-      status: form.status,
-      priority: form.priority,
-      assignee: form.assignee,
-      due_at: form.due_at,
-      points: form.points.trim() === '' ? null : Number(form.points),
+  const filtering = !!(query.trim() || filters.project || filters.assignee || filters.priority)
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return cards.filter((c) => {
+      if (filters.project && c.project !== filters.project) return false
+      if (filters.assignee && c.assignee !== filters.assignee) return false
+      if (filters.priority && c.priority !== filters.priority) return false
+      if (!q) return true
+      return (
+        c.title.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q) ||
+        (c.assignee ?? '').toLowerCase().includes(q) ||
+        c.project.toLowerCase().includes(q)
+      )
     })
-      .then((fresh) => {
-        mergeItem(fresh);
-        setDetail((d) => (d ? { ...d, item: fresh } : d));
-        setSaveMsg({ kind: 'ok', text: `Saved ${fresh.id} — the board reads server truth.` });
-        pushToast({ tone: 'ok', title: `Saved ${fresh.id}` });
-      })
-      .catch((err: Error) => {
-        setSaveMsg({ kind: 'err', text: err.message });
-        pushToast({ tone: 'err', title: 'Save failed', text: err.message });
-      })
-      .finally(() => setSaving(false));
-  };
+  }, [cards, query, filters])
 
-  const moveItem = (id: string, to: Status) => {
-    if (!items) return;
-    const current = items.find((i) => i.id === id);
-    if (!current || current.status === to) return;
-    const prev = items;
-    setItems(items.map((i) => (i.id === id ? { ...i, status: to } : i)));
-    updateItem(id, { status: to })
-      .then((fresh) => mergeItem(fresh))
-      .catch((err: Error) => {
-        setItems(prev);
-        pushToast({ tone: 'err', title: 'Could not save that move — card put back.', text: err.message });
-      });
-  };
+  const allCounts = useMemo(() => {
+    const m = Object.fromEntries(COLUMNS.map((c) => [c.id, 0])) as Record<ColumnId, number>
+    cards.forEach((c) => (m[c.column] += 1))
+    return m
+  }, [cards])
 
-  const hour = etHour();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const today = new Date().toLocaleDateString('en-US', {
-    timeZone: ET,
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
+  const stats = useMemo(
+    () => ({
+      open: cards.filter((c) => c.column !== 'done' && c.column !== 'cancelled').length,
+      done: allCounts.done,
+      cancelled: allCounts.cancelled,
+    }),
+    [cards, allCounts],
+  )
+
+  const selected = useMemo(() => cards.find((c) => c.id === selectedId) ?? null, [cards, selectedId])
+
+  const openCard = useCallback((id: string | null) => {
+    setSelectedId(id)
+    history.replaceState(null, '', id ? `#${id}` : location.pathname + location.search)
+  }, [])
+
+  useEffect(() => {
+    const id = location.hash.slice(1)
+    if (id) setSelectedId(id)
+  }, [])
+
+  const copy = useCallback(
+    async (text: string, label: string) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        notify(`${label} copied to clipboard`)
+      } catch {
+        notify('Clipboard unavailable')
+      }
+    },
+    [notify],
+  )
+
+  const openMenu = useCallback((x: number, y: number, items: MenuItem[]) => setMenu({ x, y, items }), [])
+  const closeMenu = useCallback(() => setMenu(null), [])
+
+  // No create flow: the tracker backend has no create endpoint yet, so the
+  // New/Add/Duplicate affordances are hidden until it does (see README).
+
+  const cardMenu = useCallback(
+    (e: React.MouseEvent, card: Card) => {
+      openMenu(e.clientX, e.clientY, [
+        { kind: 'label', label: card.id },
+        { kind: 'item', label: 'Open details', icon: <PanelRight size={14} />, hint: '\u21b5', onSelect: () => openCard(card.id) },
+        {
+          kind: 'item',
+          label: 'Move to',
+          icon: <ArrowRight size={14} />,
+          children: COLUMNS.map<MenuItem>((c) => ({
+            kind: 'item',
+            label: c.label,
+            checked: card.column === c.id,
+            onSelect: () => card.column !== c.id && board.updateCard(card.id, { column: c.id }, `${card.id} moved to ${c.label}`),
+          })),
+        },
+        {
+          kind: 'item',
+          label: 'Priority',
+          icon: <Flag size={14} />,
+          children: PRIORITIES.map<MenuItem>((p) => ({
+            kind: 'item',
+            label: p.label,
+            checked: card.priority === p.id,
+            onSelect: () => board.updateCard(card.id, { priority: p.id }, `${card.id} priority set to ${p.label.toLowerCase()}`),
+          })),
+        },
+        {
+          kind: 'item',
+          label: 'Assign to',
+          icon: <User size={14} />,
+          children: [
+            { kind: 'item', label: 'Unassigned', checked: !card.assignee, onSelect: () => board.updateCard(card.id, { assignee: null }, `${card.id} unassigned`) },
+            ...assignees.map<MenuItem>((a) => ({
+              kind: 'item',
+              label: a,
+              checked: card.assignee === a,
+              onSelect: () => board.updateCard(card.id, { assignee: a }, `${card.id} assigned to ${a}`),
+            })),
+          ],
+        },
+        { kind: 'sep' },
+        ...(card.column !== 'done'
+          ? [{ kind: 'item', label: 'Mark as done', icon: <Check size={14} />, onSelect: () => board.updateCard(card.id, { column: 'done' }, `${card.id} marked as done`) } as MenuItem]
+          : []),
+        { kind: 'item', label: 'Copy ID', icon: <Copy size={14} />, onSelect: () => copy(card.id, card.id) },
+        {
+          kind: 'item',
+          label: 'Copy link',
+          icon: <Link2 size={14} />,
+          onSelect: () => copy(`${location.origin}${location.pathname}#${card.id}`, 'Link'),
+        },
+        { kind: 'sep' },
+        {
+          // The backend has no DELETE: "delete" cancels the item instead.
+          kind: 'item',
+          label: 'Cancel item',
+          icon: <Trash2 size={14} />,
+          danger: true,
+          onSelect: () => {
+            if (selectedId === card.id) openCard(null)
+            board.deleteCard(card.id)
+          },
+        },
+      ])
+    },
+    [assignees, board, copy, openCard, openMenu, selectedId],
+  )
+
+  const columnMenu = useCallback(
+    (e: React.MouseEvent, col: ColumnId) => {
+      openMenu(e.clientX, e.clientY, [
+        { kind: 'label', label: COLUMN_LABEL[col] },
+        { kind: 'item', label: 'Sort by priority', icon: <ArrowDownUp size={14} />, onSelect: () => board.sortColumn(col) },
+        {
+          kind: 'item',
+          label: collapsed[col] ? 'Expand column' : 'Collapse column',
+          icon: <ChevronsLeftRight size={14} />,
+          onSelect: () => setCollapsed((c) => ({ ...c, [col]: !c[col] })),
+        },
+      ])
+    },
+    [board, collapsed, openMenu],
+  )
+
+  const boardMenu = useCallback(
+    (e: React.MouseEvent) => {
+      openMenu(e.clientX, e.clientY, [
+        { kind: 'item', label: 'Undo', icon: <Undo2 size={14} />, hint: '\u2318Z', disabled: !board.canUndo, onSelect: board.undo },
+        { kind: 'sep' },
+        {
+          kind: 'item',
+          label: view === 'board' ? 'Switch to list view' : 'Switch to board view',
+          icon: view === 'board' ? <List size={14} /> : <Columns3 size={14} />,
+          hint: 'V',
+          onSelect: () => setView((v) => (v === 'board' ? 'list' : 'board')),
+        },
+        {
+          kind: 'item',
+          label: theme === 'dark' ? 'Light mode' : 'Dark mode',
+          icon: theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />,
+          hint: 'D',
+          onSelect: toggleTheme,
+        },
+        ...(view === 'board'
+          ? [
+              { kind: 'sep' } as MenuItem,
+              {
+                kind: 'item',
+                label: 'Expand all columns',
+                icon: <ChevronsLeftRight size={14} />,
+                onSelect: () => setCollapsed(Object.fromEntries(COLUMNS.map((c) => [c.id, false])) as Record<ColumnId, boolean>),
+              } as MenuItem,
+            ]
+          : []),
+      ])
+    },
+    [board.canUndo, board.undo, openMenu, theme, toggleTheme, view],
+  )
+
+  // keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement
+      const typing = el.matches?.('input, textarea, select') || el.isContentEditable
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (typing) return
+        e.preventDefault()
+        board.undo()
+        return
+      }
+      if (e.key === 'Escape') {
+        if (settingsOpen) setSettingsOpen(false)
+        else if (selectedId) openCard(null)
+        return
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === '/') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (e.key === 'd') toggleTheme()
+      else if (e.key === 'v') setView((v) => (v === 'board' ? 'list' : 'board'))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [board, openCard, selectedId, settingsOpen, toggleTheme])
 
   return (
-    <div className="tb-app">
-      <AppShell
-        appBar={
-          <AppBar
-            title="Tracker Board"
-            subtitle={`${counts.open} open · ${counts.done} done · ${counts.cancelled} cancelled${
-              activeProject ? ` · Project: ${activeProject.title}` : ''
-            }`}
-            actions={<Badge tone="ok" dot>live</Badge>}
-          />
-        }
-      >
-        <main className="tb-main">
-          <Panel>
-            <PanelBody>
-              <div className="tb-hero">
-                <div>
-                  <h2 className="tb-hero__greet">{greeting}.</h2>
-                  <p className="tb-hero__sub">
-                    {today} · snapshot {generatedAt ? fmtTs(generatedAt) : '…'}
-                  </p>
-                </div>
-                <div className="tb-hero__progress">
-                  <div className="tb-hero__progress-label">
-                    <span>Board points done</span>
-                    <span>
-                      {hero.done}/{hero.total} pts · {hero.week} pts this week
-                    </span>
-                  </div>
-                  <ProgressBar value={hero.pct} label="Board points done" />
-                </div>
-                <span className="tb-hero__doodle" aria-hidden="true">
-                  small steps, big results
-                </span>
-              </div>
-            </PanelBody>
-          </Panel>
-
-          <FilterBar>
-            <label htmlFor="tb-project">Project</label>
-            <FilterSelect
-              id="tb-project"
-              value={projectSlug}
-              onChange={(e) => selectProject(e.target.value)}
-            >
-              <option value="">All projects</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.slug}>
-                  {p.title} ({p.member_ids.length})
-                </option>
-              ))}
-            </FilterSelect>
-            <SearchInput
-              className="tb-search"
-              placeholder="Filter cards…"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              aria-label="Filter cards"
-            />
-          </FilterBar>
-
-          {loadErr ? (
-            <EmptyState
-              title="Board snapshot unavailable"
-              text={loadErr}
-              actions={
-                <Button variant="primary" onClick={() => setReloadKey((k) => k + 1)}>
-                  Retry
-                </Button>
-              }
-            />
-          ) : items === null ? (
-            <div aria-busy="true">
-              <Skeleton style={{ height: 28, marginBottom: 12 }} />
-              <Skeleton style={{ height: 120, marginBottom: 12 }} />
-              <Skeleton style={{ height: 120 }} />
-            </div>
-          ) : (
-            <div className="tb-board">
-              {COLUMNS.map(({ status, label }) => {
-                const colItems = visible.filter((i) => i.status === status);
-                const shown = status === 'done' ? colItems.slice(0, DONE_SHOWN) : colItems;
-                return (
-                  <section
-                    key={status}
-                    className={`tb-col${hoverStatus === status && dragId ? ' drop-hover' : ''}`}
-                    data-status={status}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setHoverStatus(status);
-                    }}
-                    onDragLeave={() => setHoverStatus((s) => (s === status ? null : s))}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const id = e.dataTransfer.getData('text/plain') || dragId;
-                      setHoverStatus(null);
-                      setDragId(null);
-                      if (id) moveItem(id, status);
-                    }}
-                  >
-                    <h3 className="tb-col__head">
-                      {label} <span className="tb-col__count">{colItems.length}</span>
-                    </h3>
-                    {shown.map((item) => (
-                      <Card
-                        key={item.id}
-                        className="tb-card"
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/plain', item.id);
-                          setDragId(item.id);
-                        }}
-                        onDragEnd={() => {
-                          setDragId(null);
-                          setHoverStatus(null);
-                        }}
-                        onClick={() => openItem(item.id)}
-                      >
-                        <div className="tb-card__top">
-                          <span className="tb-card__id">{item.id}</span>
-                          <span className="tb-card__kind">{item.kind}</span>
-                        </div>
-                        <div className="tb-card__title">{item.title}</div>
-                        <div className="tb-card__meta">
-                          <span
-                            className="tb-card__dot"
-                            style={{ background: PRIO_COLORS[item.priority] }}
-                          />
-                          <span>{item.priority}</span>
-                          {item.points ? <span>{item.points} pts</span> : null}
-                          {item.assignee ? <span>{item.assignee}</span> : null}
-                          {item.due_at ? (
-                            <span className="tb-card__due">due {item.due_at.slice(0, 10)}</span>
-                          ) : null}
-                        </div>
-                      </Card>
-                    ))}
-                    {colItems.length === 0 && <div className="tb-col__empty">Nothing here</div>}
-                    {status === 'done' && colItems.length > DONE_SHOWN && (
-                      <div className="tb-col__more">
-                        + {colItems.length - DONE_SHOWN} earlier done items in the DB
-                      </div>
-                    )}
-                  </section>
-                );
-              })}
-            </div>
-          )}
-        </main>
-      </AppShell>
-
-      <div
-        className={`tb-backdrop${sheetId ? ' open' : ''}`}
-        onClick={() => setSheetId(null)}
-        aria-hidden="true"
+    <div className="flex h-full flex-col">
+      <Header
+        stats={stats}
+        query={query}
+        setQuery={setQuery}
+        searchRef={searchRef}
+        filters={filters}
+        setFilters={setFilters}
+        projects={projects}
+        assignees={assignees}
+        view={view}
+        setView={setView}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onSettings={() => setSettingsOpen(true)}
+        status={board.status}
+        syncedAt={board.syncedAt}
+        onRefresh={() => board.refresh()}
+        openMenu={openMenu}
       />
-      <aside className={`tb-sheet${sheetId ? ' open' : ''}`} aria-hidden={!sheetId}>
-        {sheetId && (
-          <>
-            <div className="tb-sheet__head">
-              <span className="tb-card__id">{sheetId}</span>
-              {detail && <span className="tb-card__kind">{detail.item.kind}</span>}
-              <span style={{ marginLeft: 'auto' }}>
-                <Button variant="outline" size="sm" onClick={() => setSheetId(null)}>
-                  Close
-                </Button>
-              </span>
-            </div>
-            <div className="tb-sheet__body">
-              {!detail || !form ? (
-                <>
-                  <Skeleton style={{ height: 24, marginBottom: 12 }} />
-                  <Skeleton style={{ height: 90, marginBottom: 12 }} />
-                  <Skeleton style={{ height: 90 }} />
-                </>
-              ) : (
-                <>
-                  <label className="tb-field">
-                    <span>Title</span>
-                    <input
-                      type="text"
-                      value={form.title}
-                      onChange={(e) => setForm({ ...form, title: e.target.value })}
-                    />
-                  </label>
-                  <div className="tb-field">
-                    <span>Status</span>
-                    <div className="tb-seg">
-                      {ALL_STATUSES.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          className={form.status === s ? 'on' : ''}
-                          onClick={() => setForm({ ...form, status: s })}
-                        >
-                          {STATUS_LABELS[s]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="tb-row2">
-                    <label className="tb-field">
-                      <span>Priority</span>
-                      <select
-                        value={form.priority}
-                        onChange={(e) => setForm({ ...form, priority: e.target.value as Priority })}
-                      >
-                        {PRIORITIES.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="tb-field">
-                      <span>Points</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={1000}
-                        value={form.points}
-                        onChange={(e) => setForm({ ...form, points: e.target.value })}
-                      />
-                    </label>
-                  </div>
-                  <div className="tb-row2">
-                    <label className="tb-field">
-                      <span>Assignee</span>
-                      <input
-                        type="text"
-                        value={form.assignee}
-                        onChange={(e) => setForm({ ...form, assignee: e.target.value })}
-                      />
-                    </label>
-                    <label className="tb-field">
-                      <span>Due date</span>
-                      <input
-                        type="date"
-                        value={form.due_at}
-                        onChange={(e) => setForm({ ...form, due_at: e.target.value })}
-                      />
-                    </label>
-                  </div>
-                  <label className="tb-field">
-                    <span>Body</span>
-                    <textarea
-                      value={form.body}
-                      onChange={(e) => setForm({ ...form, body: e.target.value })}
-                    />
-                  </label>
 
-                  <div className="tb-facts">
-                    <div>
-                      <b>Parent:</b> {detail.item.parent_id || '—'}
-                    </div>
-                    <div>
-                      <b>Source:</b> {detail.item.source || '—'}
-                      {detail.item.external_ref ? ` · Ref: ${detail.item.external_ref}` : ''}
-                    </div>
-                    <div>
-                      <b>Created:</b> {fmtTs(detail.item.created_at)}
-                    </div>
-                    <div>
-                      <b>Updated:</b> {fmtTs(detail.item.updated_at)}
-                    </div>
-                  </div>
-
-                  <h4 className="tb-section-title">Comments</h4>
-                  {detail.comments.length === 0 && (
-                    <p className="tb-activity">No comments yet.</p>
-                  )}
-                  {detail.comments.map((c, i) => (
-                    <div className="tb-comment" key={i}>
-                      <div className="tb-comment__head">
-                        {c.actor} · {fmtTs(c.ts)}
-                      </div>
-                      <div className="tb-comment__text">{c.text}</div>
-                    </div>
-                  ))}
-
-                  <h4 className="tb-section-title">History</h4>
-                  {detail.history.length === 0 && <p className="tb-activity">No changes yet.</p>}
-                  {detail.history.map((h, i) => (
-                    <p className="tb-activity" key={i}>
-                      {fmtTs(h.ts)} · {h.actor} · {h.text}
-                    </p>
-                  ))}
-                </>
-              )}
-            </div>
-            <div className="tb-sheet__foot">
-              <Button variant="primary" onClick={save} disabled={saving || !form}>
-                {saving ? 'Saving…' : 'Save changes'}
-              </Button>
-              {saveMsg && (
-                <div className={`tb-savemsg ${saveMsg.kind}`}>{saveMsg.text}</div>
-              )}
-            </div>
-          </>
+      <main className="min-h-0 flex-1 border-t border-line pt-3">
+        {view === 'board' ? (
+          <Board
+            cards={filtered}
+            allCounts={allCounts}
+            filtering={filtering}
+            collapsed={collapsed}
+            onToggle={(col) => setCollapsed((c) => ({ ...c, [col]: !c[col] }))}
+            onOpen={(card) => openCard(card.id)}
+            onMove={board.moveCard}
+            onCardMenu={cardMenu}
+            onColumnMenu={columnMenu}
+            onBoardMenu={boardMenu}
+            onCopyId={(id) => copy(id, id)}
+            selectedId={selectedId}
+          />
+        ) : (
+          <ListView
+            cards={filtered}
+            selectedId={selectedId}
+            onOpen={(card) => openCard(card.id)}
+            onCardMenu={cardMenu}
+            onColumnMenu={columnMenu}
+            onBoardMenu={boardMenu}
+          />
         )}
-      </aside>
+      </main>
 
-      <Toaster toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
+      <AnimatePresence>
+        {selected && (
+          <Drawer
+            key={selected.id}
+            card={selected}
+            assignees={assignees}
+            onClose={() => openCard(null)}
+            onUpdate={(patch, message) => board.updateCard(selected.id, patch, message)}
+            onDelete={() => {
+              openCard(null)
+              board.deleteCard(selected.id)
+            }}
+            onCopy={copy}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {settingsOpen && (
+          <Settings
+            status={board.status}
+            error={board.error}
+            generatedAt={board.generatedAt}
+            cards={cards}
+            onClose={() => setSettingsOpen(false)}
+            onRefresh={() => board.refresh()}
+          />
+        )}
+      </AnimatePresence>
+
+      {menu && <ContextMenu key={`${menu.x}-${menu.y}`} x={menu.x} y={menu.y} items={menu.items} onClose={closeMenu} />}
+
+      <Toast
+        toast={toast}
+        onUndo={() => {
+          board.undo()
+          setToast(null)
+        }}
+      />
     </div>
-  );
+  )
 }
