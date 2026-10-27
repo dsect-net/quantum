@@ -97,6 +97,7 @@ class Broker:
         self.mode = "idle"  # idle | holding | settling | restoring
         self.empty_since: float | None = None
         self.last_evict_pass = 0.0
+        self.snapshot_logged = False  # one snapshot log per job batch
         self.seen_jobs: dict[str, str] = {}  # prompt_id -> first seen state
         self.shortfall_warned_for: set[str] = set()
 
@@ -498,12 +499,15 @@ class Broker:
             if gpu["free_mib"] < self.cfg["job_headroom_mib"] and \
                     time.time() - self.last_evict_pass >= \
                     self.cfg["evict_cooldown_s"]:
-                if not self.state["outstanding"]:
+                if not self.state["outstanding"] and \
+                        not self.snapshot_logged:
+                    self.snapshot_logged = True
                     self.log("snapshot", residents=procs,
                              ollama=self.ollama_resident(),
                              gpu=gpu)
                 self.eviction_pass(queue, gpu)
         else:
+            self.snapshot_logged = False
             # Queue empty: settle, then restore (whatever the outcomes).
             if self.state["outstanding"] or self.state.get("jan_evicted"):
                 if self.empty_since is None:
