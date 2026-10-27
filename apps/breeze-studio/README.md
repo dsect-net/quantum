@@ -22,6 +22,44 @@ This folder became its canonical home Oct 19, 2026 (TRK-0212).
 Generation is asynchronous by design: Breeze renders take seconds-to-minutes, so the
 page polls job status rather than blocking.
 
+## New Voice creation (added Oct 27, 2026)
+
+The **New Voice** card designs a voice from a plain-language description and freezes
+it into a saved profile:
+
+1. `quantum_breeze_design_voice` renders one sample passage with breeze-cli's
+   `--instruction` alone (no existing profile). The raw WAV is kept as the job's
+   `design.wav` plus a `design.json` (instruction + sample text) so the design
+   survives a hub restart.
+2. `quantum_breeze_save_voice` freezes it in clone mode (`--ref-audio design.wav
+   --ref-text <the exact sample text> --save-voice <name>`), writing
+   `<voices dir>/<name>.breeze` plus a provenance sidecar in
+   `<voices dir>/.provenance/<name>.json`.
+
+Registration *is* the voices directory: `quantum_breeze_list_voices` lists the
+`*.breeze` files live, so a saved voice appears in this page's picker, the hub
+catalogue, and (via the sidecar list) Home Assistant's `tts.breeze` options with
+no further wiring. Names are lowercase slugs; existing profiles are never
+overwritten.
+
+### Gating — read before touching
+
+Creation burns GPU and writes permanent profiles, so it is **not** available to
+the breeze-demo key above (the hub refuses it: its allowlist has no design/save
+tools). Two extra secrets, both only on Tritium, neither ever in this repo:
+
+- **`/home/scott/.cooper/breeze-creator/mcp-key`** (600, dir 700) — a second gateway
+  key, label `breeze-creator` (id `mk_ac1333393dbf8faa1486e41d`, developer, tailnet,
+  expires 2027-01-25), allowlisted to exactly `quantum_breeze_design_voice`,
+  `quantum_breeze_save_voice`, `quantum_breeze_status`, `quantum_breeze_result`,
+  `quantum_breeze_list_voices`. The server holds it in a second MCP client
+  (`BREEZE_CREATOR_KEY_FILE`).
+- **`/home/scott/.cooper/breeze-creator/ui-token`** (600) — the creator token the
+  human types into the New Voice form; the server compares it per request
+  (`BREEZE_CREATOR_TOKEN_FILE`). Rotate by replacing the file's contents; no
+  restart needed. If the file is absent, the create endpoints return 503 and the
+  form reports itself locked.
+
 ## How it runs
 
 - Single-file Python (stdlib only): `breeze_server.py`. No build step, no dependencies.

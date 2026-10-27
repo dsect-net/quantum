@@ -16,7 +16,17 @@ browser. If the file is absent the page runs in a clearly-labelled
 
 Binds 0.0.0.0:7656 (LAN + tailnet, same exposure as the tracker board
 and PFML dashboard). Tailscale Serve (tailnet-only) fronts it on :8446.
+
+New Voice creation (2026-10-27): the "New Voice" card designs a voice
+from a plain-language description (hub tool quantum_breeze_design_voice)
+and freezes it into a saved profile (quantum_breeze_save_voice). Those
+two tools are NOT on this page's demo key: a second McpClient holds the
+scoped breeze-creator key (BREEZE_CREATOR_KEY_FILE), and the create
+endpoints additionally require the creator token the user types into
+the form (checked against BREEZE_CREATOR_TOKEN_FILE, never sent anywhere
+else). Without either secret the endpoints stay locked.
 """
+import hmac
 import html
 import json
 import os
@@ -32,6 +42,10 @@ PORT = 7656
 GATEWAY = os.environ.get("BREEZE_DEMO_GATEWAY", "http://127.0.0.1:8091/mcp")
 KEY_FILE = os.environ.get(
     "BREEZE_DEMO_MCP_KEY_FILE", "/home/scott/.cooper/breeze-demo/mcp-key")
+CREATOR_KEY_FILE = os.environ.get(
+    "BREEZE_CREATOR_KEY_FILE", "/home/scott/.cooper/breeze-creator/mcp-key")
+CREATOR_TOKEN_FILE = os.environ.get(
+    "BREEZE_CREATOR_TOKEN_FILE", "/home/scott/.cooper/breeze-creator/ui-token")
 BREEZE_DIR = Path("/mnt/fast/breeze-mcp")
 NEBULA_OUTPUT_ROOTS = [Path("/home/scott/ComfyUI/output")]
 MAX_BODY = 65536
@@ -50,9 +64,9 @@ class McpError(Exception):
 class McpNotProvisioned(McpError):
     pass
 
-def _load_key():
+def _load_key(path):
     try:
-        key = Path(KEY_FILE).read_text(encoding="utf-8").strip()
+        key = Path(path).read_text(encoding="utf-8").strip()
     except OSError:
         return None
     return key or None
@@ -66,10 +80,11 @@ class McpClient:
     session is shared); one re-init retry on session errors.
     """
 
-    def __init__(self):
+    def __init__(self, key_file=None):
         self._lock = threading.Lock()
         self._session = None
-        self._key = _load_key()
+        self._key_file = key_file or KEY_FILE
+        self._key = _load_key(self._key_file)
         self._rid = 100
 
     @property
@@ -125,7 +140,7 @@ class McpClient:
         if not self._key:
             raise McpNotProvisioned(
                 "MCP key not provisioned on Tritium yet "
-                f"(expected a gateway key file at {KEY_FILE}).")
+                f"(expected a gateway key file at {self._key_file}).")
         with self._lock:
             for attempt in (1, 2):
                 if not self._session:
@@ -168,6 +183,20 @@ class McpClient:
         return parsed
 
 MCP = McpClient()
+CREATOR = McpClient(CREATOR_KEY_FILE)
+
+
+def _creator_token():
+    """The shared secret a human must present to create voices, or None.
+
+    Read from disk per call so rotating the file needs no restart. The
+    token itself is only ever compared, never logged or returned.
+    """
+    try:
+        tok = Path(CREATOR_TOKEN_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return tok or None
 _audio_paths = {}          # job_id -> Path of finished MP3 (from result call)
 _audio_lock = threading.Lock()
 _prompt_param_cache = {}   # workflow -> {"node","key"} or None
@@ -259,7 +288,7 @@ padding:20px;margin-top:18px}
 .card .sub{color:var(--mut);font-size:13.5px;margin:0 0 14px;line-height:1.5}
 label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
 label:first-of-type{margin-top:0}
-select,input[type=text],textarea{width:100%;font:inherit;font-size:15px;
+select,input[type=text],input[type=password],textarea{width:100%;font:inherit;font-size:15px;
 padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
 textarea{resize:vertical;min-height:96px;line-height:1.5}
 .row{display:flex;gap:12px;flex-wrap:wrap}
@@ -377,6 +406,79 @@ function renderHistory(){
  $("histCard").style.display=history.length?"block":"none";
 }
 
+// ---------------- New Voice (design + save, creator-gated) ----------------
+let nvDesignJob=null;
+function nvToken(){return $("nvToken").value.trim();}
+function nvCount(){$("nvSampleCount").textContent=$("nvSample").value.length+" / 320 characters";}
+async function nvRefreshGate(){
+ try{const d=await api("/api/creator/status");
+   if(!d.provisioned){
+     $("nvGate").textContent="Voice creation is not provisioned on the server (no creator key file), so the form below is locked.";
+     $("nvGo").disabled=true;$("nvSave").disabled=true;
+   }else if(!d.token_set){
+     $("nvGate").textContent="No creator token is set on Tritium yet, so creation stays locked until one is provisioned.";
+     $("nvGo").disabled=true;
+   }else{
+     $("nvGate").textContent="Creation is gated: it takes the creator token (set on Tritium) plus a separate scoped hub key - the demo key this page normally uses cannot create voices.";
+   }
+ }catch(e){$("nvGate").textContent="Could not check creation status: "+e.message;}
+}
+async function nvPoll(jobId,st,fill,t0){
+ while(true){
+  if(Date.now()-t0>5*60*1000)throw new Error("Timed out after 5 minutes - the job may still finish on the hub.");
+  const s=await api("/api/breeze/status/"+encodeURIComponent(jobId));
+  if(fill&&s.chunks_total)fill.style.width=Math.round(100*(s.chunks_done||0)/s.chunks_total)+"%";
+  st.textContent="Job "+(s.state||"...")+"...";
+  if(s.state==="done")return s;
+  if(s.state==="error")throw new Error(s.error||"The job failed on the hub.");
+  await sleep(2500);
+ }
+}
+async function nvDesign(){
+ const instr=$("nvDesc").value.trim(),sample=$("nvSample").value.trim();
+ const st=$("nvStatus"),bar=$("nvBar"),fill=$("nvFill");
+ st.className="status";$("nvPlayer").style.display="none";$("nvSave").disabled=true;nvDesignJob=null;
+ if(!nvToken()){st.textContent="Enter the creator token first.";st.className="status err";return;}
+ if(!instr){st.textContent="Describe the voice first.";st.className="status err";return;}
+ if(!sample){st.textContent="Give the voice a sample line to speak.";st.className="status err";return;}
+ $("nvGo").disabled=true;bar.style.display="block";fill.style.width="6%";
+ st.textContent="Designing the voice on Tritium's GPU...";
+ const t0=Date.now();
+ try{
+  const job=await api("/api/voices/design",{method:"POST",
+    headers:{"Content-Type":"application/json","X-Creator-Token":nvToken()},
+    body:JSON.stringify({instruction:instr,sample_text:sample})});
+  nvDesignJob=job.job_id;
+  await nvPoll(nvDesignJob,st,fill,t0);
+  fill.style.width="100%";
+  const pl=$("nvPlayer");pl.src="/audio/"+encodeURIComponent(nvDesignJob);
+  pl.style.display="block";
+  st.textContent="Sample ready - have a listen. Happy with it? Name the voice and save it.";
+  $("nvSave").disabled=false;
+ }catch(e){st.textContent="Something went wrong: "+e.message;st.className="status err";bar.style.display="none";}
+ $("nvGo").disabled=false;
+}
+async function nvSave(){
+ const name=$("nvName").value.trim();
+ const st=$("nvStatus");st.className="status";
+ if(!nvDesignJob){st.textContent="Render a sample first.";st.className="status err";return;}
+ if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(name)){
+   st.textContent="Name must be a lowercase slug: letters, digits and hyphens, max 40 characters.";
+   st.className="status err";return;}
+ $("nvSave").disabled=true;$("nvGo").disabled=true;
+ st.textContent="Freezing '"+name+"' into a saved voice profile...";
+ const t0=Date.now();
+ try{
+  const job=await api("/api/voices/save",{method:"POST",
+    headers:{"Content-Type":"application/json","X-Creator-Token":nvToken()},
+    body:JSON.stringify({design_job_id:nvDesignJob,name})});
+  await nvPoll(job.job_id,st,null,t0);
+  st.textContent="Saved. '"+name+"' is now a Breeze voice - it is in the picker above, in the hub catalogue, and in Home Assistant's Breeze engine.";
+  loadVoices();
+ }catch(e){st.textContent="Something went wrong: "+e.message;st.className="status err";$("nvSave").disabled=false;}
+ $("nvGo").disabled=false;
+}
+
 // ---------------- Nebula ----------------
 let promptTargets={};
 async function loadWorkflows(){
@@ -440,6 +542,10 @@ window.addEventListener("DOMContentLoaded",()=>{
  $("bGo").addEventListener("click",breezeGenerate);
  $("nGo").addEventListener("click",nebulaGenerate);
  $("nWorkflow").addEventListener("change",notePromptTarget);
+ nvRefreshGate();nvCount();
+ $("nvSample").addEventListener("input",nvCount);
+ $("nvGo").addEventListener("click",nvDesign);
+ $("nvSave").addEventListener("click",nvSave);
 });
 """
 
@@ -491,6 +597,28 @@ on this page is already wired.</div>"""
   <div class="bar" id="bBar"><i id="bFill"></i></div>
   <audio id="bPlayer" controls style="display:none"></audio>
   <div><a class="dl" id="bDl" style="display:none" href="#">Download MP3</a></div>
+</section>
+
+<section class="card" id="nvCard">
+  <h2>New Voice &mdash; design &amp; save</h2>
+  <p class="sub">Describe a voice in plain words, hear a sample line spoken in it,
+  then freeze it into a saved profile. A saved voice shows up in the picker
+  above, in the hub catalogue, and in Home Assistant's Breeze engine.</p>
+  <p class="sub" id="nvGate">Checking creation status...</p>
+  <label for="nvToken">Creator token</label>
+  <input type="password" id="nvToken" placeholder="Creator token (lives in this form only)" autocomplete="off">
+  <label for="nvName">Voice name</label>
+  <input type="text" id="nvName" maxlength="40" placeholder="e.g. cheerful-narrator">
+  <label for="nvDesc">Voice description</label>
+  <textarea id="nvDesc" maxlength="1000" placeholder="Describe the voice: age, warmth, pace, accent, energy..."></textarea>
+  <label for="nvSample">Sample line</label>
+  <textarea id="nvSample" maxlength="320" style="min-height:56px">Hello! This is a brand new Breeze voice, designed and saved through Breeze Studio.</textarea>
+  <div class="count" id="nvSampleCount">0 / 320 characters</div>
+  <button class="primary" id="nvGo">Render sample</button>
+  <button class="primary" id="nvSave" disabled>Save voice</button>
+  <div class="status" id="nvStatus"></div>
+  <div class="bar" id="nvBar"><i id="nvFill"></i></div>
+  <audio id="nvPlayer" controls style="display:none"></audio>
 </section>
 
 <section class="card" id="histCard" style="display:none">
@@ -585,6 +713,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, "ok", "text/plain")
         elif path == "/api/voices":
             self._mcp_json(lambda: MCP.call("quantum_breeze_list_voices", {}))
+        elif path == "/api/creator/status":
+            self._json(200, {"ok": True,
+                             "provisioned": CREATOR.provisioned,
+                             "token_set": _creator_token() is not None})
         elif path == "/api/workflows":
             self._mcp_json(lambda: MCP.call("quantum_nebula_list_workflows", {}))
         elif path == "/api/workflow_prompt":
@@ -661,10 +793,72 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, data, ctype,
                    {"Content-Disposition": f'{disp}; filename="{p.name}"'})
 
+    # -- voice creation (creator-gated) --
+    def _creator_gate(self):
+        """None when the caller may create voices, else (code, obj).
+
+        Two independent secrets, neither of them the demo key: the
+        server-side breeze-creator gateway key (checked implicitly when
+        CREATOR.call runs - the hub refuses the demo key for these tools)
+        and the creator token the user typed, compared here against the
+        token file on Tritium.
+        """
+        expected = _creator_token()
+        if expected is None:
+            return 503, {"ok": False, "error": "creator_token_not_set",
+                         "message": "No creator token is provisioned on "
+                                    "Tritium yet, so voice creation is locked."}
+        given = self.headers.get("X-Creator-Token") or ""
+        if not hmac.compare_digest(given, expected):
+            return 403, {"ok": False, "error": "creator_unauthorized",
+                         "message": "That creator token does not match."}
+        return None
+
+    def _creator_post(self, path):
+        gate = self._creator_gate()
+        if gate:
+            self._json(gate[0], gate[1])
+            return
+        payload = self._read_body()
+        if payload is None:
+            self._json(400, {"ok": False, "error": "invalid JSON body"})
+            return
+        if path == "/api/voices/design":
+            instruction = str(payload.get("instruction") or "").strip()
+            sample = str(payload.get("sample_text") or "").strip()
+            if not instruction or len(instruction) > 1000:
+                self._json(400, {"ok": False, "error": "bad_instruction",
+                                 "message": "Describe the voice (max 1000 chars)."})
+                return
+            if not sample or len(sample) > 320:
+                self._json(400, {"ok": False, "error": "bad_sample_text",
+                                 "message": "A sample line is required (max 320 "
+                                            "chars - it becomes the clone reference)."})
+                return
+            self._mcp_json(lambda: CREATOR.call(
+                "quantum_breeze_design_voice",
+                {"instruction": instruction, "sample_text": sample}))
+        else:  # /api/voices/save
+            design_job_id = str(payload.get("design_job_id") or "").strip()
+            name = str(payload.get("name") or "").strip()
+            if not JOB_ID_RE.match(design_job_id):
+                self._json(400, {"ok": False, "error": "bad_design_job_id",
+                                 "message": "Render a sample first."})
+                return
+            if not name:
+                self._json(400, {"ok": False, "error": "bad_name",
+                                 "message": "Name the voice."})
+                return
+            self._mcp_json(lambda: CREATOR.call(
+                "quantum_breeze_save_voice",
+                {"design_job_id": design_job_id, "name": name}))
+
     # -- POST --
     def do_POST(self):
         path = urlparse(self.path).path
-        if path == "/api/breeze/generate":
+        if path in ("/api/voices/design", "/api/voices/save"):
+            self._creator_post(path)
+        elif path == "/api/breeze/generate":
             payload = self._read_body()
             if payload is None:
                 self._json(400, {"ok": False, "error": "invalid JSON body"})
