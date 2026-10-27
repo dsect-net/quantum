@@ -1,0 +1,4 @@
+#!/bin/sh
+# vram-broker: one-command status readout (wrapper around vram_broker.py).
+exec /usr/bin/python3 /home/scott/vram-broker/vram_broker.py status \
+  --config /home/scott/.cooper/vram-broker/config.json "$@"
