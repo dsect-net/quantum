@@ -1,7 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { installStubApi, seedLiveSettings, type StubApiOptions } from './fixtures/hub-api';
+import {
+  STUB_MCP_KEY,
+  installStubApi,
+  seedLiveSettings,
+  type StubApiOptions,
+} from './fixtures/hub-api';
 
 /**
  * Live-mode E2E for the Quantum everything app.
@@ -22,6 +27,17 @@ import { installStubApi, seedLiveSettings, type StubApiOptions } from './fixture
  *    section, per the client's Promise.allSettled design — the rest of
  *    the dashboard stays live.
  *  - Create → Jobs renders the stubbed Nebula queue (active + recent).
+ *
+ * Part 2 (2026-10-28, TRK-0483) — the MCP-backed screens, both of
+ * which speak POST /mcp (JSON-RPC) to the same hub base URL:
+ *  - More → Services & tools connects to the stub gateway, lists the
+ *    fixture tools, and running `dsect_services_status` renders the
+ *    pretty services result (2/4 up, 2 problems — the Part 1 estate).
+ *  - A dead MCP gateway (HTTP 500 on every /mcp) degrades only that
+ *    screen: it shows its honest Connection failed card while the
+ *    /api-backed Home dashboard in the same boot stays live.
+ *  - Mail renders the fixture inbox (dsect_mail_list over MCP), and
+ *    opening a thread renders its fixture message (dsect_mail_read).
  *
  * Screenshots continue the app-shell numbering under e2e/screenshots/.
  */
@@ -51,6 +67,31 @@ async function openLive(page: Page, opts: StubApiOptions = {}) {
     'aria-current',
     'page',
   );
+}
+
+/**
+ * Boot live AND MCP-configured: the stub worker key in settings is
+ * what flips Services & tools and Mail from "not connected" to live
+ * (mcpConfigured / mailConfigured both require base URL + key).
+ */
+async function openLiveMcp(page: Page, opts: StubApiOptions = {}) {
+  await installStubApi(page, opts);
+  await seedLiveSettings(page, { mcpKey: STUB_MCP_KEY });
+  await page.goto('/');
+  await expect(page.getByText('Quantum · DSECT')).toBeVisible();
+  await expect(tabBar(page).getByRole('button', { name: 'Home', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+}
+
+/** More → Services & tools, landing on its heading. */
+async function openServices(page: Page) {
+  await openTab(page, 'More');
+  await page.getByRole('button', { name: /Services & tools/ }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Services & tools', exact: true }),
+  ).toBeVisible();
 }
 
 test('Home renders the stubbed live estate, not demo mode', async ({ page }) => {
@@ -129,4 +170,111 @@ test('Create → Jobs renders the stubbed Nebula queue', async ({ page }) => {
   await expect(page.getByText('Stub render — harbour at dusk')).toBeVisible();
 
   await shot(page, '15-create-jobs-live-mobile.png');
+});
+
+test('More → Services & tools renders live MCP tools and a services_status result', async ({ page }) => {
+  await openLiveMcp(page);
+  await openServices(page);
+
+  // Configured (base URL + stub worker key): no demo / not-connected state.
+  await expect(page.getByText('Demo mode')).toHaveCount(0);
+  await expect(page.getByText('Not connected', { exact: true })).toHaveCount(0);
+
+  // The connect action runs the real client handshake against the stub:
+  // initialize (session id via response header) → tools/list.
+  await page.getByRole('button', { name: 'Connect to MCP gateway' }).click();
+  await expect(page.getByText('Connected — 8 tools')).toBeVisible();
+  await expect(page.getByText('dsect_services_status')).toBeVisible();
+  await expect(page.getByText('dsect_mail_list')).toBeVisible();
+
+  // Run the curated read-only runner: tools/call dsect_services_status
+  // with { only_problems: false } renders the pretty result — the same
+  // estate as Part 1 (2 of 4 up; Eclipse down, DSECT Mail degraded).
+  await page.getByRole('button', { name: 'Run: Services status' }).click();
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(page.getByText('2/4 up')).toBeVisible();
+  await expect(page.getByText('2 problems')).toBeVisible();
+  for (const name of ['Hub API', 'Nebula', 'Eclipse (Jellyfin)', 'DSECT Mail']) {
+    await expect(page.getByText(name, { exact: true })).toBeVisible();
+  }
+  await expect(page.getByText('Demo mode')).toHaveCount(0);
+
+  await shot(page, '16-services-mcp-live-mobile.png');
+});
+
+test('a dead MCP gateway degrades only the Services screen', async ({ page }) => {
+  await openLiveMcp(page, { mcp: { httpStatus: 500 } });
+  await openServices(page);
+
+  await page.getByRole('button', { name: 'Connect to MCP gateway' }).click();
+
+  // The screen's own honest failure card — naming the HTTP failure,
+  // offering a retry, and inventing no tool data.
+  await expect(page.getByText('Connection failed')).toBeVisible();
+  await expect(page.getByText('MCP gateway returned HTTP 500')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page.getByText(/Connected —/)).toHaveCount(0);
+  await expect(page.getByText('dsect_services_status')).toHaveCount(0);
+
+  await shot(page, '17-services-mcp-failure-mobile.png');
+
+  // The rest of the app in the same boot is unaffected: Home is still
+  // live off the (healthy) stub /api endpoints.
+  await openTab(page, 'Home');
+  await expect(page.getByTestId('services-summary')).toContainText('2/4');
+  await expect(page.getByText('OVMS kit for Jinx')).toBeVisible();
+  await expect(page.getByText('Demo mode')).toHaveCount(0);
+});
+
+test('Mail renders the fixture inbox over MCP', async ({ page }) => {
+  await openLiveMcp(page);
+
+  await openTab(page, 'Mail');
+  const list = page.getByRole('list', { name: 'Inbox messages' });
+
+  // dsect_mail_list rows: subjects, senders (the Part 1 roster) and
+  // HERALD triage snippets, with the server-matched count up top.
+  await expect(page.getByText('3 messages')).toBeVisible();
+  for (const subject of [
+    'Live-mode fixtures are green',
+    'Nebula queue: stub render finished',
+    'Docket: OVMS kit for Jinx',
+  ]) {
+    await expect(list.getByText(subject)).toBeVisible();
+  }
+  for (const sender of ['Cooper', 'Qubit', 'Helm']) {
+    await expect(list.getByText(sender, { exact: true })).toBeVisible();
+  }
+  await expect(
+    list.getByText('Fixture inbox: the live-mode E2E data set is ready.'),
+  ).toBeVisible();
+  await expect(page.getByText('Mail is not connected')).toHaveCount(0);
+  await expect(page.getByText('Demo mode')).toHaveCount(0);
+
+  await shot(page, '18-mail-inbox-live-mobile.png');
+});
+
+test('opening a Mail thread renders its fixture message', async ({ page }) => {
+  await openLiveMcp(page);
+
+  await openTab(page, 'Mail');
+  await page.getByRole('button', { name: /Live-mode fixtures are green/ }).click();
+
+  // ThreadView: a second connect on the shared client, then
+  // dsect_mail_read — subject heading, From header, body, attachments
+  // listed by name only.
+  await expect(
+    page.getByRole('heading', { name: 'Live-mode fixtures are green' }),
+  ).toBeVisible();
+  await expect(page.getByText('Cooper <cooper@dsect.net>')).toBeVisible();
+  await expect(
+    page.getByText(/Fixture body: the stub mailbox is rendering live threads/),
+  ).toBeVisible();
+  await expect(page.getByText('fixture-notes.txt')).toBeVisible();
+
+  await shot(page, '19-mail-thread-live-mobile.png');
+
+  // Back returns to the still-live inbox.
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByText('Nebula queue: stub render finished')).toBeVisible();
 });

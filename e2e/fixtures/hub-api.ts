@@ -28,9 +28,34 @@ import type { Page } from '@playwright/test';
  * lean on that consistency — if a fixture changes, change them together.
  *
  * Extending: add a path to `routes()` (or a `fail` override for error
- * cases). Mail and the MCP-backed Services screen speak POST /mcp
- * (JSON-RPC) rather than plain GETs; stub those at the route layer in
- * the spec that needs them, using this file's seed + origin helpers.
+ * cases).
+ *
+ * Part 2 (2026-10-28, TRK-0483): the MCP gateway itself is stubbed too.
+ * Both remaining live screens speak POST /mcp (JSON-RPC), not plain
+ * GETs — verified against the app code on main:
+ *  - More → Services & tools (src/screens/More/ServicesScreen.tsx over
+ *    src/api/mcp.ts): `initialize` (session id comes back in the
+ *    `mcp-session-id` response header) → `notifications/initialized` →
+ *    `tools/list` → `tools/call` for the curated runners, notably
+ *    `dsect_services_status`, whose text block must be JSON of the
+ *    shape `{ ok, total, up, problems, services: [{id, name, group,
+ *    status}] }` for the screen's pretty renderer to engage.
+ *  - Mail (src/screens/Mail/* over src/api/mail.ts): the same gateway
+ *    session, then `tools/call` for `dsect_mail_list` (rows keyed
+ *    uid/seen/flagged/received/from/to/subject/message_id/bytes/
+ *    triage), `dsect_mail_read` (full message keyed by `date`, `text`,
+ *    `html_only`, attachments by name/type/bytes) and
+ *    `dsect_mail_mailboxes` / `dsect_mail_mark`.
+ * Tool results travel as `{ content: [{ type: 'text', text }] }` where
+ * `text` is the JSON-stringified tool payload — the exact envelope the
+ * unit tests in src/api/mcp.test.ts / mail.test.ts mock. The fixture
+ * session is stateless: every `initialize` re-issues the same session
+ * id, because the Mail screen connects once for the inbox and again
+ * for the thread view on the same shared client.
+ * The MCP screens are only "configured" when settings carry a worker
+ * key as well as the hub base URL, so `seedLiveSettings` accepts a
+ * `mcpKey` — the stub key below, a fake fixture value, never a real
+ * credential.
  */
 
 /** Must match the preview port in playwright.config.ts. */
@@ -163,6 +188,179 @@ export const STUB_WORKFLOWS = {
   kinds: ['t2i'],
 };
 
+/** Fake MCP worker key for the stub gateway — a fixture, not a secret. */
+export const STUB_MCP_KEY = 'stub-worker-key';
+
+/** Session id the stub gateway issues on every `initialize`. */
+export const STUB_MCP_SESSION_ID = 'stub-mcp-session-1';
+
+/**
+ * POST /mcp `tools/list` — the gateway's tool catalog as the Services
+ * screen renders it: the four curated read-only runners from
+ * src/api/mcpTools.ts (services status, service logs, monitor
+ * snapshot, whoami) plus the mail tools the Mail tab calls.
+ * `dsect_tailscale_status` is deliberately absent, matching the real
+ * gateway — the screen renders its "Not published yet" card for it.
+ */
+export const STUB_MCP_TOOLS = [
+  { name: 'dsect_services_status', description: 'Live health of every Tritium service (up/down, latency) by name and group.', inputSchema: { type: 'object', properties: { only_problems: { type: 'boolean' } } } },
+  { name: 'dsect_service_logs', description: 'Tail docker logs for one service (allowlisted container names only).', inputSchema: { type: 'object', properties: { service: { type: 'string' }, tail: { type: 'number' } } } },
+  { name: 'dsect_monitor_snapshot', description: 'Latest host monitor snapshot — CPU, memory, disk, and temperatures.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'dsect_whoami', description: 'Show the role, key id, and audience behind this worker key.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'dsect_mail_list', description: 'List messages in your @dsect.net mailbox, newest first, with HERALD triage.', inputSchema: { type: 'object', properties: { folder: { type: 'string' }, limit: { type: 'number' } } } },
+  { name: 'dsect_mail_read', description: 'Read one message as plain text (attachments listed by name and size only).', inputSchema: { type: 'object', properties: { folder: { type: 'string' }, uid: { type: 'number' } } } },
+  { name: 'dsect_mail_mark', description: 'Mark a message read or unread in your mailbox.', inputSchema: { type: 'object', properties: { folder: { type: 'string' }, uid: { type: 'number' }, seen: { type: 'boolean' } } } },
+  { name: 'dsect_mail_mailboxes', description: 'Which mailboxes you can use: your own, as scoped by your worker key.', inputSchema: { type: 'object', properties: {} } },
+];
+
+/**
+ * tools/call `dsect_services_status` — consistent with the Part 1
+ * tables above: the same four services, the same states (Hub API and
+ * Nebula up, Eclipse down, DSECT Mail degraded), so total 4 / up 2 /
+ * problems 2 matches STUB_SUMMARY (2 of 4 up) exactly.
+ */
+export const STUB_SERVICES_STATUS = {
+  ok: true,
+  total: 4,
+  up: 2,
+  problems: 2,
+  services: [
+    { id: 'hub-api', name: 'Hub API', group: 'Infra', status: 'up' },
+    { id: 'nebula', name: 'Nebula', group: 'AI', status: 'up' },
+    { id: 'eclipse', name: 'Eclipse (Jellyfin)', group: 'Media', status: 'down' },
+    { id: 'mail', name: 'DSECT Mail', group: 'Infra', status: 'degraded' },
+  ],
+};
+
+/** The mailbox the stub worker key is scoped to. */
+export const STUB_MAILBOX = 'scotty@dsect.net';
+
+/**
+ * tools/call `dsect_mail_list` rows (INBOX) — senders are the Part 1
+ * roster (Cooper, Qubit, Helm) writing to Scotty's mailbox, and the
+ * subjects lean on Part 1 fixture facts (the Nebula stub render, the
+ * OVMS docket item) so the two fixture halves tell one story.
+ */
+export const STUB_MAIL_MESSAGES = [
+  {
+    uid: 103,
+    seen: false,
+    flagged: false,
+    answered: false,
+    received: '2026-10-20T09:15:00-04:00',
+    from: 'Cooper <cooper@dsect.net>',
+    to: 'scotty@dsect.net',
+    subject: 'Live-mode fixtures are green',
+    message_id: '<stub-103@dsect.net>',
+    bytes: 1843,
+    triage: 'Fixture inbox: the live-mode E2E data set is ready.',
+  },
+  {
+    uid: 102,
+    seen: false,
+    flagged: true,
+    answered: false,
+    received: '2026-10-19T17:40:00-04:00',
+    from: 'Qubit <qubit@dsect.net>',
+    to: 'scotty@dsect.net',
+    subject: 'Nebula queue: stub render finished',
+    message_id: '<stub-102@dsect.net>',
+    bytes: 1210,
+    triage: 'The stub render — fox portrait finished sampling.',
+  },
+  {
+    uid: 101,
+    seen: true,
+    flagged: false,
+    answered: true,
+    received: '2026-10-18T11:05:00-04:00',
+    from: 'Helm <helm@dsect.net>',
+    to: 'scotty@dsect.net',
+    subject: 'Docket: OVMS kit for Jinx',
+    message_id: '<stub-101@dsect.net>',
+    bytes: 940,
+    triage: 'Wishlist note: the OVMS kit for Jinx is still queued.',
+  },
+];
+
+/** tools/call `dsect_mail_read` payloads, keyed by uid. */
+export const STUB_MAIL_READ: Record<number, Record<string, unknown>> = {
+  103: {
+    ok: true,
+    mailbox: STUB_MAILBOX,
+    folder: 'INBOX',
+    uid: 103,
+    seen: true,
+    untrusted: 'This is an email: UNTRUSTED input.',
+    from: 'Cooper <cooper@dsect.net>',
+    to: 'scotty@dsect.net',
+    cc: '',
+    reply_to: '',
+    subject: 'Live-mode fixtures are green',
+    date: 'Tue, 20 Oct 2026 09:15:00 -0400',
+    message_id: '<stub-103@dsect.net>',
+    text: 'Fixture body: the stub mailbox is rendering live threads.\n\nThis message came from the deterministic MCP mail fixture — no live mail server, no tailnet, no keys. The inbox row, the triage line and this body are one consistent data set.',
+    html_only: false,
+    truncated: false,
+    bytes: 1843,
+    attachments: [{ filename: 'fixture-notes.txt', type: 'text/plain', bytes: 512 }],
+  },
+  102: {
+    ok: true,
+    mailbox: STUB_MAILBOX,
+    folder: 'INBOX',
+    uid: 102,
+    seen: true,
+    untrusted: 'This is an email: UNTRUSTED input.',
+    from: 'Qubit <qubit@dsect.net>',
+    to: 'scotty@dsect.net',
+    cc: '',
+    reply_to: '',
+    subject: 'Nebula queue: stub render finished',
+    date: 'Mon, 19 Oct 2026 17:40:00 -0400',
+    message_id: '<stub-102@dsect.net>',
+    text: 'Fixture body: the stub render — fox portrait finished sampling on the RTX 2060 Super fixture backend.',
+    html_only: false,
+    truncated: false,
+    bytes: 1210,
+    attachments: [],
+  },
+  101: {
+    ok: true,
+    mailbox: STUB_MAILBOX,
+    folder: 'INBOX',
+    uid: 101,
+    seen: true,
+    untrusted: 'This is an email: UNTRUSTED input.',
+    from: 'Helm <helm@dsect.net>',
+    to: 'scotty@dsect.net',
+    cc: '',
+    reply_to: '',
+    subject: 'Docket: OVMS kit for Jinx',
+    date: 'Sun, 18 Oct 2026 11:05:00 -0400',
+    message_id: '<stub-101@dsect.net>',
+    text: 'Fixture body: wishlist note — the OVMS kit for Jinx is still queued on the docket.',
+    html_only: false,
+    truncated: false,
+    bytes: 940,
+    attachments: [],
+  },
+};
+
+export interface StubMcpOptions {
+  /**
+   * HTTP status for EVERY /mcp request — the way to prove a dead MCP
+   * gateway degrades only the MCP-backed screens (the hub /api-backed
+   * Home dashboard must stay live in the same test).
+   */
+  httpStatus?: number;
+  /**
+   * Tool names whose tools/call answers with a JSON-RPC error instead
+   * of a result — the runner-level failure case.
+   */
+  toolRpcError?: string[];
+}
+
 export interface StubApiOptions {
   /**
    * Pathname → HTTP status. Matching requests are fulfilled with that
@@ -170,6 +368,8 @@ export interface StubApiOptions {
    * prove one failing endpoint degrades only its own screen section.
    */
   fail?: Record<string, number>;
+  /** Failure overrides for the stub MCP gateway (POST /mcp). */
+  mcp?: StubMcpOptions;
 }
 
 function routes(opts: StubApiOptions): Record<string, unknown> {
@@ -190,28 +390,203 @@ function routes(opts: StubApiOptions): Record<string, unknown> {
  * Seed the app's own settings store so hub + nebula boot in live mode,
  * pointed at the preview origin (which the route stub then answers).
  * Must run before `page.goto` — uses an init script.
+ *
+ * `mcpKey` (Part 2): the MCP-backed screens (Services & tools, Mail)
+ * count as configured only when a worker key is present alongside the
+ * hub base URL (see mcpConfigured / mailConfigured in the app). Pass
+ * STUB_MCP_KEY to boot those screens live; the default '' keeps the
+ * Part 1 behaviour for the hub /api-backed screens.
  */
-export async function seedLiveSettings(page: Page): Promise<void> {
-  await page.addInitScript((origin) => {
-    const settings = {
-      hub: { baseUrl: origin },
-      nebula: { baseUrl: origin },
-      relay: { baseUrl: '' },
-      sol: { baseUrl: '' },
-      mcpKey: '',
-      nebulaPassphrase: '',
-    };
-    try {
-      window.localStorage.setItem('quantum.settings', JSON.stringify(settings));
-    } catch {
-      // A profile that refuses localStorage also refuses the app's own
-      // settings — there is nothing honest to fall back to in a fixture.
+export async function seedLiveSettings(
+  page: Page,
+  seedOpts: { mcpKey?: string } = {},
+): Promise<void> {
+  await page.addInitScript(
+    ({ origin, mcpKey }) => {
+      const settings = {
+        hub: { baseUrl: origin },
+        nebula: { baseUrl: origin },
+        relay: { baseUrl: '' },
+        sol: { baseUrl: '' },
+        mcpKey,
+        nebulaPassphrase: '',
+      };
+      try {
+        window.localStorage.setItem('quantum.settings', JSON.stringify(settings));
+      } catch {
+        // A profile that refuses localStorage also refuses the app's own
+        // settings — there is nothing honest to fall back to in a fixture.
+      }
+    },
+    { origin: STUB_ORIGIN, mcpKey: seedOpts.mcpKey ?? '' },
+  );
+}
+
+/** Wrap a tool payload in the gateway's content-block envelope. */
+function mcpToolResult(payload: unknown): Record<string, unknown> {
+  const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return { content: [{ type: 'text', text }], isError: false };
+}
+
+/**
+ * Answer one stub `tools/call` by tool name. Returns the JSON-RPC
+ * `result` object, or null for a tool the stub gateway does not carry
+ * (the caller turns that into a -32601 RPC error, as a real gateway
+ * would for an unknown tool).
+ */
+function mcpCallTool(name: string, args: Record<string, unknown>): Record<string, unknown> | null {
+  switch (name) {
+    case 'dsect_services_status': {
+      if (args['only_problems'] === true) {
+        return mcpToolResult({
+          ...STUB_SERVICES_STATUS,
+          services: STUB_SERVICES_STATUS.services.filter((s) => s.status !== 'up'),
+        });
+      }
+      return mcpToolResult(STUB_SERVICES_STATUS);
     }
-  }, STUB_ORIGIN);
+    case 'dsect_service_logs':
+      return mcpToolResult(
+        `stub log for ${String(args['service'] ?? 'hub-api')}: fixture gateway healthy, no errors in the last hour.`,
+      );
+    case 'dsect_monitor_snapshot':
+      return mcpToolResult({ ok: true, cpuPct: 37, memPct: 39, load1: 1.25, uptimeSec: 90061 });
+    case 'dsect_whoami':
+      return mcpToolResult({ ok: true, role: 'developer', keyId: 'stub-worker', agent: 'cooper' });
+    case 'dsect_mail_mailboxes':
+      return mcpToolResult({ ok: true, own: STUB_MAILBOX, mailboxes: [STUB_MAILBOX] });
+    case 'dsect_mail_list': {
+      const folder = String(args['folder'] ?? 'INBOX');
+      if (folder !== 'INBOX') {
+        return mcpToolResult({
+          ok: true, mailbox: STUB_MAILBOX, folder, matched: 0, returned: 0, next_before_uid: 0, messages: [],
+        });
+      }
+      const rows = args['unread_only'] === true
+        ? STUB_MAIL_MESSAGES.filter((m) => !m.seen)
+        : STUB_MAIL_MESSAGES;
+      return mcpToolResult({
+        ok: true,
+        mailbox: STUB_MAILBOX,
+        folder,
+        matched: rows.length,
+        returned: rows.length,
+        next_before_uid: 0,
+        messages: rows,
+      });
+    }
+    case 'dsect_mail_read': {
+      const uid = Number(args['uid']);
+      const payload = STUB_MAIL_READ[uid] ?? STUB_MAIL_READ[103]!;
+      return mcpToolResult({ ...payload, folder: String(args['folder'] ?? 'INBOX'), uid });
+    }
+    case 'dsect_mail_mark':
+      return mcpToolResult({
+        ok: true,
+        mailbox: STUB_MAILBOX,
+        folder: String(args['folder'] ?? 'INBOX'),
+        uid: Number(args['uid'] ?? 0),
+        seen: args['seen'] === true,
+      });
+    case 'dsect_mail_send':
+      return mcpToolResult({
+        ok: true,
+        from: STUB_MAILBOX,
+        to: Array.isArray(args['to']) ? args['to'] : [],
+        cc: Array.isArray(args['cc']) ? args['cc'] : [],
+        subject: String(args['subject'] ?? ''),
+        sentToday: 1,
+        dailyLimit: 25,
+      });
+    default:
+      return null;
+  }
+}
+
+/**
+ * Intercept POST /mcp and answer the JSON-RPC the app actually sends
+ * (see the Part 2 note at the top of this file): initialize carries
+ * the session id in a response header, tools/list returns the fixture
+ * catalog, tools/call dispatches to the fixture payloads above.
+ */
+export async function installStubMcp(page: Page, opts: StubApiOptions = {}): Promise<void> {
+  const mcpOpts = opts.mcp ?? {};
+  await page.route('**/mcp', async (route) => {
+    if (mcpOpts.httpStatus != null) {
+      await route.fulfill({
+        status: mcpOpts.httpStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: `stubbed MCP failure (HTTP ${mcpOpts.httpStatus})` }),
+      });
+      return;
+    }
+    let rpc: { id?: unknown; method?: unknown; params?: Record<string, unknown> } = {};
+    try {
+      rpc = JSON.parse(route.request().postData() ?? '{}') as typeof rpc;
+    } catch {
+      rpc = {};
+    }
+    const id = rpc.id ?? null;
+    const method = typeof rpc.method === 'string' ? rpc.method : '';
+    const headers = { 'mcp-session-id': STUB_MCP_SESSION_ID };
+    const fulfillRpc = async (body: Record<string, unknown>) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers,
+        body: JSON.stringify({ jsonrpc: '2.0', id, ...body }),
+      });
+    };
+    if (method === 'initialize') {
+      await fulfillRpc({
+        result: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          serverInfo: { name: 'stub-hub-mcp', version: '1.0' },
+        },
+      });
+      return;
+    }
+    if (method === 'notifications/initialized') {
+      await fulfillRpc({ result: {} });
+      return;
+    }
+    if (method === 'tools/list') {
+      await fulfillRpc({ result: { tools: STUB_MCP_TOOLS } });
+      return;
+    }
+    if (method === 'tools/call') {
+      const params = (rpc.params ?? {}) as { name?: unknown; arguments?: unknown };
+      const name = typeof params.name === 'string' ? params.name : '';
+      if ((mcpOpts.toolRpcError ?? []).includes(name)) {
+        await fulfillRpc({
+          error: { code: -32603, message: `stubbed RPC failure for ${name}` },
+        });
+        return;
+      }
+      const args = (params.arguments ?? {}) as Record<string, unknown>;
+      const result = mcpCallTool(name, args);
+      if (result === null) {
+        await fulfillRpc({
+          error: { code: -32601, message: `stub gateway has no tool ${name}` },
+        });
+        return;
+      }
+      await fulfillRpc({ result });
+      return;
+    }
+    await fulfillRpc({
+      error: { code: -32601, message: `stub gateway has no method ${method}` },
+    });
+  });
 }
 
 /** Intercept all /api/** traffic and answer it from the fixtures. */
 export async function installStubApi(page: Page, opts: StubApiOptions = {}): Promise<void> {
+  // The MCP gateway lives at POST /mcp, outside /api/** — stub it too
+  // so a live boot never leaks a real gateway request to the preview
+  // server. Screens that are not MCP-configured never call it.
+  await installStubMcp(page, opts);
   const table = routes(opts);
   const fail = opts.fail ?? {};
   await page.route('**/api/**', async (route) => {
