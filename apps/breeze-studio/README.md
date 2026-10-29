@@ -107,7 +107,7 @@ cp apps/breeze-studio/breeze-demo.service ~/.config/systemd/user/breeze-demo.ser
 systemctl --user daemon-reload   # only if the unit changed
 systemctl --user restart breeze-demo.service
 curl -s https://tritium-linux.fairy-chinstrap.ts.net:8446/healthz
-curl -s https://tritium-linux.fairy-chinstrap.ts.net:8446/api/voices   # expect 8 profiles
+curl -s https://tritium-linux.fairy-chinstrap.ts.net:8446/api/voices   # expect 9 profiles
 ```
 
 (Verify the unit's installed location on the host before copying — check
