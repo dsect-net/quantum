@@ -106,7 +106,7 @@ SDK validation errors (`Input validation error: …`). Optional dependencies
 ## Registering with the universal MCP gateway (hub-api)
 
 The hub gateway (`dsect-net/hub-api`, separate repo per MONOREPO.md)
-aggregates service MCP endpoints behind its `dsect_*` surface. Deployment
+aggregates service MCP endpoints behind its `quantum_*` surface. Deployment
 registration for this toolset (ops procedure, run by whoever deploys):
 
 1. Deploy `services/singularity` on Tritium (compose service name
