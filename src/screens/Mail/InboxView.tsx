@@ -3,9 +3,14 @@
  *
  * Folder picker + unread filter, message rows (sender, subject, snippet,
  * date, unread marker), and cursor pagination via the server's
- * next_before_uid. Rows are QButtons (real button semantics, 44px+ touch
- * targets) — the kit has no list-row component, so this is the gap-free
- * compliant choice rather than a raw <button>.
+ * next_before_uid. Rows are native <button>s styled as light list rows
+ * (the AgentsView row pattern), NOT QButtons: the Untitled Button wraps
+ * ALL of its children in a single <span data-text> label span and centers
+ * nowrap content, so a multi-part row stuffed inside it is not a flex row
+ * at all — the oversized label overflows the button equally on both sides
+ * (TRK-0484: avatar half off the left edge, sender/subject clipped, date
+ * clipped at right at 390px). A real <button> keeps the row's children as
+ * direct flex items, so min-w-0 + truncate ellipsize inside the row.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, EmptyState, Spinner } from '@dsect/ui/components/feedback';
@@ -34,8 +39,8 @@ export interface InboxViewProps {
 
 /**
  * One inbox row. Tap opens the thread; long-press toggles read/unread.
- * The tap is suppressed when the long-press fired so a hold never also
- * opens the thread.
+ * useLongPress suppresses the click after a completed long-press (its
+ * onClickCapture handler), so a hold never also opens the thread.
  */
 function MessageRow({
   message: m,
@@ -46,25 +51,18 @@ function MessageRow({
   onOpen: () => void;
   onToggleSeen: (seen: boolean) => void;
 }) {
-  const suppressTap = useRef(false);
   const lp = useLongPress({
     onLongPress: () => {
-      suppressTap.current = true;
       onToggleSeen(!m.seen);
     },
   });
 
   return (
-    <QButton
-      onPress={() => {
-        if (suppressTap.current) {
-          suppressTap.current = false;
-          return;
-        }
-        onOpen();
-      }}
+    <button
+      type="button"
+      onClick={onOpen}
       aria-label={`${m.seen ? '' : 'Unread: '}${m.subject}, from ${displayNameOf(m.from)}${m.seen ? '' : '. Long-press to mark as read.'}`}
-      className="flex w-full items-start gap-3 p-3 text-left"
+      className="flex min-h-[44px] w-full items-start gap-3 rounded-lg border border-border-secondary bg-bg-primary p-3 text-left"
       {...lp}
     >
       <span
@@ -79,7 +77,7 @@ function MessageRow({
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
           <span
-            className={`truncate text-sm ${m.seen ? 'text-text-secondary' : 'font-semibold'}`}
+            className={`min-w-0 truncate text-sm ${m.seen ? 'text-text-secondary' : 'font-semibold'}`}
           >
             {displayNameOf(m.from)}
           </span>
@@ -98,7 +96,7 @@ function MessageRow({
           </span>
         )}
       </span>
-    </QButton>
+    </button>
   );
 }
 

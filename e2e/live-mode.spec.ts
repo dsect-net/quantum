@@ -38,6 +38,8 @@ import {
  *    /api-backed Home dashboard in the same boot stays live.
  *  - Mail renders the fixture inbox (dsect_mail_list over MCP), and
  *    opening a thread renders its fixture message (dsect_mail_read).
+ *    The inbox test also guards row geometry at 390px (TRK-0484):
+ *    no element of a message row may overflow the viewport.
  *
  * Screenshots continue the app-shell numbering under e2e/screenshots/.
  */
@@ -250,6 +252,25 @@ test('Mail renders the fixture inbox over MCP', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText('Mail is not connected')).toHaveCount(0);
   await expect(page.getByText('Demo mode')).toHaveCount(0);
+
+  // Regression guard (TRK-0484): at 390px the rows must not overflow
+  // the viewport — the page gains no horizontal scrollbar and every
+  // row element (avatar, sender, subject, snippet, date) keeps its
+  // bounding box inside the viewport, truncating with ellipsis
+  // instead of clipping at the edges.
+  const geometry = await list.evaluate((root) => {
+    const vw = document.documentElement.clientWidth;
+    const outside: string[] = [];
+    root.querySelectorAll('button, button *').forEach((n) => {
+      const r = n.getBoundingClientRect();
+      if (r.left < -1 || r.right > vw + 1) {
+        outside.push(`${n.tagName}:${(n.textContent ?? '').slice(0, 32)}`);
+      }
+    });
+    return { vw, scrollWidth: document.documentElement.scrollWidth, outside };
+  });
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.vw);
+  expect(geometry.outside).toEqual([]);
 
   await shot(page, '18-mail-inbox-live-mobile.png');
 });
