@@ -45,7 +45,7 @@ deploying it. See `docs/MONOREPO.md`.
 - Secrets (worker keys, org tokens, passphrases) are user-entered, stored
   on-device via Capacitor Preferences (localStorage fallback), never in code.
 - Identity is always attributable: mutations carry an actor/author; audit log
-  records who did what. `dsect_whoami` on the hub MCP shows role/key id.
+  records who did what. `quantum_whoami` on the hub MCP shows role/key id.
 - `@dsect.net` email is the canonical org identity for profiles.
 
 ### 2026-10-15 — Design language
