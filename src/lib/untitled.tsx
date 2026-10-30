@@ -18,6 +18,14 @@ import type { InputProps as UntitledInputProps } from '@/components/base/input/i
 import { Toggle as UntitledToggle } from '@/components/base/toggle/toggle';
 import type { ComponentProps } from 'react';
 
+/**
+ * QButton contract: children must be a text label, optionally flanked by
+ * self-closing icons — the Untitled Button wraps all children in one
+ * `<span data-text>` inside a nowrap inline-flex root, so complex content
+ * (flex rows, Avatars, layout elements) overflows/clips (TRK-0484). For
+ * complex content use a native <button> / list-row instead. Enforced by
+ * the qbutton-guard repo-scan test in src/lib/qbutton-guard.test.ts.
+ */
 export function QButton({ size = 'lg', color = 'primary', ...props }: UntitledButtonProps) {
   return <UntitledButton size={size} color={color} {...props} />;
 }
