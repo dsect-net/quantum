@@ -104,6 +104,10 @@ describe('QButton guard — repo scan (TRK-0492)', () => {
     expect(failures).toEqual([]);
   });
 
+  it('allowlist is empty — the last pre-existing complex usage was migrated (TRK-0498)', () => {
+    expect(QBUTTON_ALLOWLIST).toEqual([]);
+  });
+
   it('allowlist entries still match real violations (no stale exemptions)', () => {
     for (const entry of QBUTTON_ALLOWLIST) {
       const found = files.find(({ rel }) => rel === entry.file);

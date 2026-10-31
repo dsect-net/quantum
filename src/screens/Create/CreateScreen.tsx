@@ -59,12 +59,17 @@ export function CreateScreen() {
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">
+        {/* min-w-0 (TRK-0498): Tabs is a flex item in this header row,
+            and its panel is rendered inside it — a panel whose content
+            has a wide min-content (e.g. the Gallery list rows' nowrap
+            captions) would otherwise inflate the whole module past the
+            viewport via this item's automatic minimum size. */}
         <Tabs
           tabs={tabs}
           label="Create views"
           value={view}
           onChange={(id) => setView(id as CreateView)}
-          className="flex-1"
+          className="flex-1 min-w-0"
         />
         {configured && (
           <Badge tone="ok" size="sm" dot>
