@@ -41,17 +41,13 @@ export interface QButtonAllowlistEntry {
  * Explicit allowlist for pre-existing complex usages. Each entry is
  * per-file + per-line with a reason; the repo-scan test also fails if
  * an entry no longer matches a real violation (no stale exemptions).
+ *
+ * The list is EMPTY as of TRK-0498 — the one entry it ever held
+ * (GalleryView's list row) was migrated to a native list-row button,
+ * so an empty allowlist is the healthy state: every complex-children
+ * QButton usage in src/** now fails the repo scan, no exceptions.
  */
-export const QBUTTON_ALLOWLIST: QButtonAllowlistEntry[] = [
-  {
-    file: 'screens/Create/GalleryView.tsx',
-    line: 205,
-    reason:
-      'Pre-existing gallery list row: QButton wraps a flex thumbnail+caption row. ' +
-      'Predates this guard (TRK-0492) and is tracked for migration to a native ' +
-      'button/list-row; it does not license new complex children anywhere else.',
-  },
-];
+export const QBUTTON_ALLOWLIST: QButtonAllowlistEntry[] = [];
 
 function isQuote(ch: string): boolean {
   return ch === '"' || ch === "'" || ch === '`';

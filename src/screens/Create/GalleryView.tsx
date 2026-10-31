@@ -202,32 +202,36 @@ export function GalleryView({ conn }: GalleryViewProps) {
       ) : (
         <div className="flex flex-col gap-2" role="list" aria-label="Generated images">
           {filtered.map((item) => (
-            <QButton
+            // Native list-row button, NOT a QButton (TRK-0498; the
+            // InboxView MessageRow precedent, TRK-0484): the Untitled
+            // Button wraps all children in a single nowrap label span, so
+            // this thumbnail+caption row was never a flex row and
+            // overflowed at 390px. A real <button> keeps the thumbnail
+            // and caption as direct flex items, so min-w-0 + truncate
+            // ellipsize inside the row. Tap still opens the viewer.
+            <button
               key={item.path}
               type="button"
-              color="tertiary"
               onClick={() => setViewer(item)}
               aria-label={'Open ' + item.path}
-              className="w-full"
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-border-secondary bg-bg-primary p-3 text-left"
             >
-              <span className="flex w-full items-center gap-3 text-left">
-                <AuthenticatedImage
-                  baseUrl={conn.baseUrl}
-                  passphrase={conn.passphrase}
-                  path={item.path}
-                  kind="thumb"
-                  size={112}
-                  alt=""
-                  className="h-14 w-14 shrink-0 rounded object-cover"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{basename(item.path)}</span>
-                  <span className="block text-xs text-text-secondary">
-                    {[formatDate(item.mtime), item.backend].filter(Boolean).join(' · ')}
-                  </span>
+              <AuthenticatedImage
+                baseUrl={conn.baseUrl}
+                passphrase={conn.passphrase}
+                path={item.path}
+                kind="thumb"
+                size={112}
+                alt=""
+                className="h-14 w-14 shrink-0 rounded object-cover"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{basename(item.path)}</span>
+                <span className="block text-xs text-text-secondary">
+                  {[formatDate(item.mtime), item.backend].filter(Boolean).join(' · ')}
                 </span>
               </span>
-            </QButton>
+            </button>
           ))}
         </div>
       )}

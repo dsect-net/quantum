@@ -188,6 +188,32 @@ export const STUB_WORKFLOWS = {
   kinds: ['t2i'],
 };
 
+/** GET /api/gallery?kind=image (Nebula) — two stub outputs, newest first.
+ * The second filename is deliberately far longer than a 390px row can
+ * hold: the Gallery list-row regression guard (TRK-0498) relies on it
+ * truncating inside the row instead of overflowing the viewport. */
+export const STUB_GALLERY = {
+  total: 2,
+  items: [
+    {
+      path: 'out/stub_fox_portrait_0001.png',
+      kind: 'image',
+      mtime: 1760001000,
+      dir: 'out',
+      tags: [],
+      backend: 'nvidia',
+    },
+    {
+      path: 'out/a-very-long-stub-render-filename-that-must-truncate-inside-the-list-row.png',
+      kind: 'image',
+      mtime: 1760002000,
+      dir: 'out',
+      tags: [],
+      backend: 'nvidia',
+    },
+  ],
+};
+
 /** Fake MCP worker key for the stub gateway — a fixture, not a secret. */
 export const STUB_MCP_KEY = 'stub-worker-key';
 
@@ -383,6 +409,7 @@ function routes(opts: StubApiOptions): Record<string, unknown> {
     '/api/docket/items': STUB_DOCKET,
     '/api/jobs': STUB_JOBS,
     '/api/workflows': STUB_WORKFLOWS,
+    '/api/gallery': STUB_GALLERY,
   };
 }
 

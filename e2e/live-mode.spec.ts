@@ -41,6 +41,12 @@ import {
  *    The inbox test also guards row geometry at 390px (TRK-0484):
  *    no element of a message row may overflow the viewport.
  *
+ * Part 3 (2026-10-31, TRK-0498) — Create → Gallery in list layout:
+ *    the thumbnail+caption rows are native list-row buttons (migrated
+ *    off QButton, the last complex-children usage the TRK-0492 guard
+ *    allowlisted), guarded by the same 390px row-geometry contract as
+ *    the inbox rows: no row element may overflow the viewport.
+ *
  * Screenshots continue the app-shell numbering under e2e/screenshots/.
  */
 
@@ -298,4 +304,48 @@ test('opening a Mail thread renders its fixture message', async ({ page }) => {
   // Back returns to the still-live inbox.
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.getByText('Nebula queue: stub render finished')).toBeVisible();
+});
+
+test('Create → Gallery list rows stay inside the 390px viewport (TRK-0498)', async ({ page }) => {
+  await openLive(page);
+
+  await openTab(page, 'Create');
+  await page.getByRole('tab', { name: 'Gallery' }).click();
+
+  // The stub gallery (2 outputs) renders with its loaded/total count.
+  const list = page.getByRole('list', { name: 'Generated images' });
+  await expect(page.getByText('2 of 2 images')).toBeVisible();
+
+  // Switch to the list layout: one native list-row button per image,
+  // thumbnail + basename caption + date/backend line.
+  await page.getByRole('radio', { name: 'List view' }).click();
+  await expect(list.getByText('stub_fox_portrait_0001.png')).toBeVisible();
+  await expect(
+    list.getByText(
+      'a-very-long-stub-render-filename-that-must-truncate-inside-the-list-row.png',
+    ),
+  ).toBeVisible();
+
+  // Regression guard (TRK-0498; same geometry contract as the TRK-0484
+  // inbox guard): at 390px the rows must not overflow the viewport —
+  // the page gains no horizontal scrollbar and every row element
+  // (thumbnail, caption) keeps its bounding box inside the viewport,
+  // the long basename truncating with ellipsis instead of pushing
+  // the row out. Inside a QButton this failed: the vendored Button
+  // wrapped the whole row in one nowrap label span.
+  const geometry = await list.evaluate((root) => {
+    const vw = document.documentElement.clientWidth;
+    const outside: string[] = [];
+    root.querySelectorAll('button, button *').forEach((n) => {
+      const r = n.getBoundingClientRect();
+      if (r.left < -1 || r.right > vw + 1) {
+        outside.push(`${n.tagName}:${(n.textContent ?? '').slice(0, 32)}`);
+      }
+    });
+    return { vw, scrollWidth: document.documentElement.scrollWidth, outside };
+  });
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.vw);
+  expect(geometry.outside).toEqual([]);
+
+  await shot(page, '20-create-gallery-list-live-mobile.png');
 });
